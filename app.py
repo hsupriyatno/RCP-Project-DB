@@ -79,23 +79,21 @@ try:
     st.title(f"📊 Reliability Analysis: {sheet_pilihan}")
     st.caption(f"Reporting Period: {bln_ref} {thn_ref} | Analysis Data: {target_m_name} {target_y}")
 
-    # 4. SECTION: CHART & HIGHLIGHT (Pindah ke Atas)
+# 4. SECTION: CHART & HIGHLIGHT
     if 'RATE' in df_main.columns and 'PART NUMBER' in df_main.columns:
         top_10 = df_main.sort_values(by='RATE', ascending=False).head(10)
         
-        st.subheader(f"📈 Top 10 Removal Rate Comparison ({target_m_name})")
-        # Menggunakan kolom penuh agar chart terlihat jelas di atas
+        # Gabungkan Nama Bulan dan Tahun untuk Judul
+        full_period = f"{target_m_name} {target_y}"
+        
+        st.subheader(f"📈 Top 10 Removal Rate Comparison ({full_period})")
+        
         fig = px.bar(top_10, x='PART NUMBER', y='RATE', 
                      color='RATE', color_continuous_scale='Reds',
-                     text_auto='.4f')
+                     text_auto='.4f',
+                     title=f"Removal Rate Comparison ({full_period})") # Menambahkan tahun di title chart
         fig.update_layout(xaxis_tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
-        
-        # Tabel Ringkasan di bawah chart
-        with st.expander("View Top 10 Summary Table"):
-            st.dataframe(top_10[['PART NUMBER', 'DESCRIPTION', 'RATE']], use_container_width=True, hide_index=True)
-
-    st.divider()
 
     # 5. SECTION: EXPLORER & DRILL-DOWN
     st.subheader("🔍 Component Explorer")
@@ -150,3 +148,4 @@ try:
 
 except Exception as e:
     st.error(f"Critical System Error: {e}")
+
