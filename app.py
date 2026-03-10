@@ -82,4 +82,7 @@ try:
 except Exception as e:
     st.error(f"Terjadi kesalahan: {e}")
     st.info("Pastikan file Excel dan library sudah sesuai.")
+# Tambahkan parameter key agar setiap grafik punya ID unik
+            # Kita gunakan nama sheet_pilihan sebagai ID uniknya
+            st.plotly_chart(fig, use_container_width=True, key=f"chart_{sheet_pilihan}")
 
