@@ -17,8 +17,10 @@ st.markdown("""
         border-radius: 10px; 
         box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
     }
-    /* Header tabel rata kiri agar rapi */
-    [data-testid="stDataFrame"] div[data-testid="stTable"] th { text-align: left !important; }
+    /* Memaksa semua isi tabel menjadi rata tengah (Center) */
+    [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th {
+        text-align: center !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -32,6 +34,10 @@ def clean_dynamic_columns(df):
             df.columns = [str(c).strip().upper() for c in new_cols]
             break
     df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
+    
+    # FIX: Pastikan tidak ada NaN yang menyebabkan error konversi
+    df = df.fillna(0)
+    
     if 'RATE' in df.columns:
         df['RATE'] = pd.to_numeric(df['RATE'], errors='coerce').fillna(0)
     return df
@@ -40,6 +46,7 @@ def clean_dynamic_columns(df):
 @st.cache_data
 def load_all_data(file_name, sheet_name):
     try:
+        # Ambil referensi Bulan/Tahun dari sheet utama
         df_crit = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None, nrows=3, usecols="A")
         bln_raw = str(df_crit.iloc[1, 0]).strip().upper()
         thn_raw = str(df_crit.iloc[2, 0]).strip().replace('.0', '')
@@ -47,8 +54,10 @@ def load_all_data(file_name, sheet_name):
         df_main = pd.read_excel(file_name, sheet_name=sheet_name, header=None)
         df_main = clean_dynamic_columns(df_main)
         
-        df_hist = pd.read_excel(file_name, sheet_name="COMPONENT REPLACEMENT")
+        # Load History dari sheet ke-3 (Component Replacement)
+        df_hist = pd.read_excel(file_name, sheet_name=2) # Menggunakan index agar lebih aman
         df_hist.columns = [str(c).strip().upper() for c in df_hist.columns]
+        df_hist = df_hist.fillna(0)
         
         if 'DATE' in df_hist.columns:
             df_hist['DATE'] = pd.to_datetime(df_hist['DATE'], errors='coerce')
@@ -65,7 +74,8 @@ def get_period_info(bulan, tahun):
              'JULY':7,'AUGUST':8,'SEPTEMBER':9,'OCTOBER':10,'NOVEMBER':11,'DECEMBER':12}
     m_num = m_map.get(bulan, 12)
     try:
-        curr = datetime(int(tahun), m_num, 1)
+        y_int = int(float(tahun))
+        curr = datetime(y_int, m_num, 1)
         prev = curr - timedelta(days=1)
         p_name = [k for k, v in m_map.items() if v == prev.month][0]
         return prev.month, prev.year, p_name
@@ -78,7 +88,9 @@ FILE_PATH = 'COMPONENT_RELIABILITY_DHC6-300.xlsm'
 try:
     xls = pd.ExcelFile(FILE_PATH)
     st.sidebar.title("Navigation")
-    sheet_pilihan = st.sidebar.selectbox("Pilih Sheet Report:", xls.sheet_names)
+    
+    # Memberikan key unik pada selectbox
+    sheet_pilihan = st.sidebar.selectbox("Pilih Sheet Report:", xls.sheet_names, key="main_nav")
     
     df_main, df_history, bln_ref, thn_ref = load_all_data(FILE_PATH, sheet_pilihan)
     target_m, target_y, target_m_name = get_period_info(bln_ref, thn_ref)
@@ -102,16 +114,23 @@ try:
 
     # 6. COMPONENT EXPLORER
     st.subheader("🔍 Component Explorer")
-    search = st.text_input("Cari Part Number atau Deskripsi:")
+    search = st.text_input("Cari Part Number atau Deskripsi:", key="comp_search")
     
     filtered = df_main.copy()
     if search:
         mask = df_main.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)
         filtered = df_main[mask]
 
-    event = st.dataframe(filtered, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
+    event = st.dataframe(
+        filtered, 
+        use_container_width=True, 
+        hide_index=True, 
+        on_select="rerun", 
+        selection_mode="single-row",
+        key="explorer_table"
+    )
 
-    # 7. PART REMOVAL DETAIL
+    # 7. PART REMOVAL DETAIL (RASIO 5:1:1)
     if event.selection.rows:
         selected_idx = event.selection.rows[0]
         row = filtered.iloc[selected_idx]
@@ -120,14 +139,13 @@ try:
         st.write("---")
         st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn_selected}")
         
-        # Rasio kolom 5:1:1 agar deskripsi panjang tidak terpotong
         m1, m2, m3 = st.columns([5, 1, 1])
         with m1:
             st.metric("Description", row.get('DESCRIPTION', 'N/A'))
         with m2:
             st.metric("Current Rate", f"{row.get('RATE', 0):.2f}")
         with m3:
-            st.metric("Total Qty Rem", f"{row.get('QTY REM', 0)} EA")
+            st.metric("Total Qty Rem", f"{int(row.get('QTY REM', 0))} EA")
 
         if not df_history.empty:
             col_pn_h = next((c for c in df_history.columns if 'PART' in c.upper()), None)
@@ -139,18 +157,27 @@ try:
                 ].copy()
                 
                 if not hist_match.empty:
-                    if 'DATE_STR' in hist_match.columns:
-                        hist_match['DATE'] = hist_match['DATE_STR']
-                    
-                    # Kolom REMARK telah dihapus dari daftar tampilan
-                    potential_cols = ['DATE', 'REASON OF REMOVAL', 'TSN', 'TSO']
+                    # Menampilkan detail tanpa kolom REMARK
+                    potential_cols = ['DATE_STR', 'REASON OF REMOVAL', 'TSN', 'TSO']
                     existing_cols = [c for c in potential_cols if c in hist_match.columns]
-                    st.dataframe(hist_match[existing_cols], use_container_width=True, hide_index=True)
+                    
+                    st.dataframe(
+                        hist_match[existing_cols], 
+                        use_container_width=True, 
+                        hide_index=True,
+                        column_config={
+                            "DATE_STR": st.column_config.Column("DATE", width="small"),
+                            "REASON OF REMOVAL": st.column_config.Column(width="large"),
+                            "TSN": st.column_config.Column(width="small"),
+                            "TSO": st.column_config.Column(width="small")
+                        }
+                    )
                 else:
                     st.info(f"Tidak ada record removal untuk {pn_selected} pada {full_period}.")
 
+# PENUTUP BLOK EXCEPT UNTUK KEAMANAN SYNTAX
 except Exception as e:
     st.error(f"Terjadi kesalahan sistem: {e}")
 
 st.sidebar.markdown("---")
-st.sidebar.info("Aviation Reliability Dashboard v1.2")
+st.sidebar.info(f"Logged in as: HERY SUPRIYATNO")
