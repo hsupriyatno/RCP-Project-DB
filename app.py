@@ -32,8 +32,11 @@ def clean_dynamic_columns(df):
             df.columns = [str(c).strip().upper() for c in new_cols]
             break
     df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
+    df = df.fillna(0) # Proteksi NaN
     if 'RATE' in df.columns:
         df['RATE'] = pd.to_numeric(df['RATE'], errors='coerce').fillna(0)
+    if 'QTY REM' in df.columns:
+        df['QTY REM'] = pd.to_numeric(df['QTY REM'], errors='coerce').fillna(0)
     return df
 
 # 3. FUNGSI LOAD DATA
@@ -47,12 +50,13 @@ def load_all_data(file_name, sheet_name):
         df_main = pd.read_excel(file_name, sheet_name=sheet_name, header=None)
         df_main = clean_dynamic_columns(df_main)
         
+        # Load History - Pastikan Nama Sheet Sesuai
         df_hist = pd.read_excel(file_name, sheet_name="COMPONENT REPLACEMENT")
         df_hist.columns = [str(c).strip().upper() for c in df_hist.columns]
         
         if 'DATE' in df_hist.columns:
-            df_hist['DATE'] = pd.to_datetime(df_hist['DATE'], errors='coerce')
-            df_hist['DATE_STR'] = df_hist['DATE'].dt.strftime('%d-%m-%Y')
+            df_hist['DATE_DT'] = pd.to_datetime(df_hist['DATE'], errors='coerce')
+            df_hist['DATE_STR'] = df_hist['DATE_DT'].dt.strftime('%d-%m-%Y')
             
         return df_main, df_hist, bln_raw, thn_raw
     except Exception as e:
@@ -65,12 +69,12 @@ def get_period_info(bulan, tahun):
              'JULY':7,'AUGUST':8,'SEPTEMBER':9,'OCTOBER':10,'NOVEMBER':11,'DECEMBER':12}
     m_num = m_map.get(bulan, 12)
     try:
-        curr = datetime(int(tahun), m_num, 1)
+        curr = datetime(int(float(tahun)), m_num, 1)
         prev = curr - timedelta(days=1)
         p_name = [k for k, v in m_map.items() if v == prev.month][0]
         return prev.month, prev.year, p_name
     except:
-        return 11, 2025, "NOVEMBER"
+        return 1, 2026, "JANUARY"
 
 # --- MAIN APP START ---
 FILE_PATH = 'COMPONENT_RELIABILITY_DHC6-300.xlsm'
@@ -98,6 +102,10 @@ try:
         fig.update_layout(xaxis_title="PN & DESC", yaxis_title="RATE", xaxis_tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
 
+        # TOMBOL VIEW DATA TABLE (Expander)
+        with st.expander("📊 Click to View Top 10 Data Table"):
+            st.table(top_10[['PART NUMBER', 'DESCRIPTION', 'QTY REM', 'RATE']])
+
     st.divider()
 
     # 6. COMPONENT EXPLORER
@@ -109,9 +117,10 @@ try:
         mask = df_main.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)
         filtered = df_main[mask]
 
+    # SELECTION RERUN
     event = st.dataframe(filtered, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
 
-# 7. PART REMOVAL DETAIL
+    # 7. PART REMOVAL DETAIL (HARUS DI DALAM BLOK TRY)
     if event.selection.rows:
         selected_idx = event.selection.rows[0]
         row = filtered.iloc[selected_idx]
@@ -120,33 +129,26 @@ try:
         st.write("---")
         st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn_selected}")
         
-        # Rasio kolom metrik tetap 5:1:1 agar deskripsi terlihat jelas
         m1, m2, m3 = st.columns([5, 1, 1])
-        with m1:
-            st.metric("Description", row.get('DESCRIPTION', 'N/A'))
-        with m2:
-            st.metric("Current Rate", f"{row.get('RATE', 0):.2f}")
-        with m3:
-            st.metric("Total Qty Rem", f"{row.get('QTY REM', 0)} EA")
+        with m1: st.metric("Description", row.get('DESCRIPTION', 'N/A'))
+        with m2: st.metric("Current Rate", f"{row.get('RATE', 0):.2f}")
+        with m3: st.metric("Total Qty Rem", f"{int(row.get('QTY REM', 0))} EA")
 
         if not df_history.empty:
             col_pn_h = next((c for c in df_history.columns if 'PART' in c.upper()), None)
-            if col_pn_h:
+            if col_pn_h and 'DATE_DT' in df_history.columns:
                 hist_match = df_history[
                     (df_history[col_pn_h].astype(str).str.strip() == pn_selected) & 
-                    (df_history['DATE'].dt.month == target_m) & 
-                    (df_history['DATE'].dt.year == target_y)
+                    (df_history['DATE_DT'].dt.month == target_m) & 
+                    (df_history['DATE_DT'].dt.year == target_y)
                 ].copy()
                 
                 if not hist_match.empty:
-                    if 'DATE_STR' in hist_match.columns:
-                        hist_match['DATE'] = hist_match['DATE_STR']
-                    
-                    # Kolom REMARK tetap dihapus sesuai instruksi sebelumnya
+                    # Map DATE_STR ke DATE agar tampilan cantik
+                    hist_match['DATE'] = hist_match['DATE_STR']
                     potential_cols = ['DATE', 'REASON OF REMOVAL', 'TSN', 'TSO']
                     existing_cols = [c for c in potential_cols if c in hist_match.columns]
                     
-                    # Menerapkan perbandingan lebar kolom 1:5:1:1
                     st.dataframe(
                         hist_match[existing_cols], 
                         use_container_width=True, 
@@ -160,10 +162,9 @@ try:
                     )
                 else:
                     st.info(f"Tidak ada record removal untuk {pn_selected} pada {full_period}.")
+
 except Exception as e:
     st.error(f"Terjadi kesalahan sistem: {e}")
 
 st.sidebar.markdown("---")
-st.sidebar.info("Aviation Reliability Dashboard v1.2")
-
-
+st.sidebar.info("Aviation Reliability Dashboard v1.2 | User: Hery Supriyatno")
