@@ -1,8 +1,3 @@
-Mengerti, Pak Hery. Jadi kesimpulannya adalah semua elemen pada bagian detail—mulai dari judul "PART REMOVAL DETAIL", teks "Description", hingga seluruh isi dan Header Tabel (DATE, REASON OF REMOVAL, TSN, TSO)—semuanya dikembalikan ke Rata Kiri (Left Aligned) agar terlihat seragam dan konsisten.
-
-Berikut adalah kode lengkap dan final untuk memastikan tidak ada lagi bagian yang tertinggal atau salah format:
-
-Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -137,3 +132,4 @@ try:
 
 except Exception as e:
     st.error(f"Sistem Error: {e}")
+
