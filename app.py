@@ -132,24 +132,24 @@ try:
         selection_mode="single-row"
     )
 
-# 7. PART REMOVAL DETAIL (Polesan Akhir: Proporsi 2:1:1)
+# 7. PART REMOVAL DETAIL (Final: Center Title, No Remark, Proporsi 1:5:1:1)
     if event.selection.rows:
         selected_idx = event.selection.rows[0]
         row = filtered.iloc[selected_idx]
         pn_selected = str(row['PART NUMBER']).strip()
         
         st.write("---")
-        st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn_selected}")
+        # Membuat judul rata tengah (Center)
+        st.markdown(f"<h3 style='text-align: center;'>🛠️ PART REMOVAL DETAIL: {pn_selected}</h3>", unsafe_allow_html=True)
         
-        # Mengatur kolom: Description (50%), Rate (25%), Qty (25%)
-        m1, m2, m3 = st.columns([2, 1, 1]) 
+        # Perbandingan kolom 1:5:1:1 (Kosong : Description : Rate : Qty)
+        # Kolom pertama dibiarkan kosong sebagai spacer agar Description lebih ke tengah
+        _, c1, c2, c3 = st.columns([1, 5, 1, 1]) 
         
-        # Menggunakan .get() untuk keamanan data jika kolom kosong
-        m1.metric("Description", row.get('DESCRIPTION', 'N/A'))
-        m2.metric("Current Rate", f"{row.get('RATE', 0):.2f}")
-        m3.metric("Total Qty Removed", f"{row.get('QTY REM', 0)} EA")
+        c1.metric("Description", row.get('DESCRIPTION', 'N/A'))
+        c2.metric("Current Rate", f"{row.get('RATE', 0):.2f}")
+        c3.metric("Total Qty Rem", f"{row.get('QTY REM', 0)} EA")
 
-        # Tabel history tetap di bawah dengan format dd-mm-yyyy dan tanpa indeks
         if not df_history.empty:
             col_pn_h = next((c for c in df_history.columns if 'PART' in c.upper()), None)
             if col_pn_h:
@@ -163,13 +163,13 @@ try:
                     if 'DATE_STR' in hist_match.columns:
                         hist_match['DATE'] = hist_match['DATE_STR']
                     
-                    potential_cols = ['DATE', 'REASON OF REMOVAL', 'REMARK', 'TSN', 'TSO']
+                    # 'REMARK' sengaja dihilangkan dari daftar ini
+                    potential_cols = ['DATE', 'REASON OF REMOVAL', 'TSN', 'TSO']
                     existing_cols = [c for c in potential_cols if c in hist_match.columns]
                     
                     st.dataframe(hist_match[existing_cols], use_container_width=True, hide_index=True)
                 else:
-                    st.info(f"Tidak ada record removal untuk {pn_selected} pada {full_period}.")
-            else:
+                    st.info(f"Tidak ada record removal untuk {pn_selected} pada {full_period}.")            else:
                 st.warning("Kolom identifier Part Number tidak ditemukan di sheet history.")
 
 except Exception as e:
@@ -178,6 +178,7 @@ except Exception as e:
 # Footer
 st.sidebar.markdown("---")
 st.sidebar.info("Aviation Reliability Dashboard v1.2")
+
 
 
 
