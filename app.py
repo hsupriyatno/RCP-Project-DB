@@ -8,20 +8,27 @@ st.title("✈️ Reliability Dashboard DHC6-300")
 
 @st.cache_data
 def load_data(file_name, sheet_name):
-    # 1. Membaca file Excel
+    # 1. Membaca Excel tanpa menghapus apapun dulu
+    # Kita gunakan header=0 agar Python mencoba mengambil baris pertama sebagai judul
     df = pd.read_excel(file_name, sheet_name=sheet_name)
     
-    # 2. HANYA menghapus kolom yang 100% kosong isinya (bukan berdasarkan nama)
-    df = df.dropna(how='all', axis=1)
-    
-    # 3. HANYA menghapus baris yang 100% kosong
+    # 2. Hapus baris yang 100% kosong (sering ada di paling bawah atau atas)
     df = df.dropna(how='all', axis=0)
     
-    # 4. (Opsional) Jika Bapak ingin mengganti nama 'Unnamed' menjadi kosong agar rapi
-    df.columns = ["" if "Unnamed" in str(col) else col for col in df.columns]
+    # 3. Hapus kolom yang 100% kosong (kolom hantu di sebelah kanan)
+    df = df.dropna(how='all', axis=1)
+    
+    # 4. Merapikan nama kolom 'Unnamed' agar tidak merusak tampilan, 
+    # tapi tetap mempertahankan datanya agar tidak hilang.
+    new_columns = []
+    for i, col in enumerate(df.columns):
+        if "Unnamed" in str(col):
+            new_columns.append(f"Col_{i}") # Beri nama sementara agar data tetap muncul
+        else:
+            new_columns.append(col)
+    df.columns = new_columns
     
     return df
-
 try:
     # Nama file harus sama persis dengan yang ada di GitHub
     file_target = 'COMPONENT_RELIABILITY_DHC6-300.xlsm'
@@ -46,5 +53,6 @@ try:
 except Exception as e:
     st.error(f"Terjadi kesalahan: {e}")
     st.info("Pastikan file 'COMPONENT_RELIABILITY_DHC6-300.xlsm' sudah di-upload ke GitHub.")
+
 
 
