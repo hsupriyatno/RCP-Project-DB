@@ -1,18 +1,3 @@
-Paham, Pak Hery. Sepertinya saat penyatuan kode tadi ada bagian yang terpotong. Mohon maaf atas ketidaknyamanannya.
-
-Berikut adalah kode lengkap dan final yang sudah memperbaiki semua poin:
-
-Rasio Kolom 1:5:1:1: Memberikan ruang maksimal untuk Description agar tidak terpotong.
-
-Alignment: Judul detail dan isi deskripsi tetap Rata Kiri (Left Aligned) agar konsisten.
-
-Header Tabel Center: Menggunakan CSS agar judul kolom (DATE, REASON, TSN, TSO) berada di tengah.
-
-No Remark: Kolom Remark sudah dihilangkan dari tampilan tabel history.
-
-Clean View: Menghilangkan kolom indeks (nomor baris) di semua tabel agar terlihat profesional.
-
-Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -148,3 +133,4 @@ try:
 
 except Exception as e:
     st.error(f"Sistem Error: {e}")
+
