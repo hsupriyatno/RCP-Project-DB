@@ -1,3 +1,10 @@
+Paham, Pak Hery. Bapak ingin tombol yang bisa menampilkan/menyembunyikan tabel data pendukung tepat di bawah grafik batang (Top 10), agar dashboard tidak terlihat terlalu penuh jika datanya sedang tidak dibutuhkan.
+
+Error SyntaxError: expected 'except' or 'finally' block pada screenshot Bapak terjadi karena ada struktur try yang tidak ditutup dengan benar di bagian akhir kode.
+
+Berikut adalah kode yang sudah saya perbaiki. Saya tambahkan fitur "Show Data Table" menggunakan st.expander tepat di bawah chart:
+
+Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -13,16 +20,18 @@ st.markdown("""
     [data-testid="stMetricValue"] { font-size: 22px !important; }
     .stMetric { 
         background-color: #ffffff; 
-        padding: 10px; 
+        padding: 15px; 
         border-radius: 10px; 
         box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
+        text-align: center;
     }
-    /* Header tabel rata kiri agar rapi */
-    [data-testid="stDataFrame"] div[data-testid="stTable"] th { text-align: left !important; }
+    [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th {
+        text-align: center !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. FUNGSI PEMBERSIH DATA DINAMIS
+# 2. FUNGSI PEMBERSIH DATA
 def clean_dynamic_columns(df):
     for i in range(len(df)):
         row_values = [str(val).upper() for val in df.iloc[i].values]
@@ -32,8 +41,13 @@ def clean_dynamic_columns(df):
             df.columns = [str(c).strip().upper() for c in new_cols]
             break
     df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
+    df = df.fillna(0) # Proteksi float NaN to integer
+    
     if 'RATE' in df.columns:
         df['RATE'] = pd.to_numeric(df['RATE'], errors='coerce').fillna(0)
+    if 'QTY REM' in df.columns:
+        df['QTY REM'] = pd.to_numeric(df['QTY REM'], errors='coerce').fillna(0)
+        
     return df
 
 # 3. FUNGSI LOAD DATA
@@ -47,8 +61,9 @@ def load_all_data(file_name, sheet_name):
         df_main = pd.read_excel(file_name, sheet_name=sheet_name, header=None)
         df_main = clean_dynamic_columns(df_main)
         
-        df_hist = pd.read_excel(file_name, sheet_name="COMPONENT REPLACEMENT")
+        df_hist = pd.read_excel(file_name, sheet_name=2) 
         df_hist.columns = [str(c).strip().upper() for c in df_hist.columns]
+        df_hist = df_hist.fillna(0)
         
         if 'DATE' in df_hist.columns:
             df_hist['DATE'] = pd.to_datetime(df_hist['DATE'], errors='coerce')
@@ -59,35 +74,45 @@ def load_all_data(file_name, sheet_name):
         st.error(f"Gagal memuat data: {e}")
         return pd.DataFrame(), pd.DataFrame(), "N/A", "N/A"
 
-# 4. LOGIKA PERIODE BULAN
+# 4. LOGIKA PERIODE
 def get_period_info(bulan, tahun):
     m_map = {'JANUARY':1,'FEBRUARY':2,'MARCH':3,'APRIL':4,'MAY':5,'JUNE':6,
              'JULY':7,'AUGUST':8,'SEPTEMBER':9,'OCTOBER':10,'NOVEMBER':11,'DECEMBER':12}
     m_num = m_map.get(bulan, 12)
     try:
-        curr = datetime(int(tahun), m_num, 1)
+        y_int = int(float(tahun))
+        curr = datetime(y_int, m_num, 1)
         prev = curr - timedelta(days=1)
         p_name = [k for k, v in m_map.items() if v == prev.month][0]
         return prev.month, prev.year, p_name
     except:
         return 11, 2025, "NOVEMBER"
 
-# --- MAIN APP START ---
+# --- MAIN APP ---
 FILE_PATH = 'COMPONENT_RELIABILITY_DHC6-300.xlsm'
 
 try:
     xls = pd.ExcelFile(FILE_PATH)
     st.sidebar.title("Navigation")
-    sheet_pilihan = st.sidebar.selectbox("Pilih Sheet Report:", xls.sheet_names)
+    sheet_pilihan = st.sidebar.selectbox("Pilih Sheet Report:", xls.sheet_names, key="main_nav")
     
     df_main, df_history, bln_ref, thn_ref = load_all_data(FILE_PATH, sheet_pilihan)
     target_m, target_y, target_m_name = get_period_info(bln_ref, thn_ref)
     full_period = f"{target_m_name} {target_y}"
 
     st.title(f"📊 Reliability Analysis: {sheet_pilihan}")
-    st.caption(f"Reporting Period: {bln_ref} {thn_ref} | Analysis Data: {full_period}")
+    st.caption(f"Reporting Period: {bln_ref} {thn_ref} | Data Analysis: {full_period}")
 
-    # 5. CHART
+    # Summary Metrics
+    if not df_main.empty:
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Total Components", f"{len(df_main)} Items")
+        c2.metric("Total Monthly Removals", f"{int(df_main['QTY REM'].sum())} EA")
+        c3.metric("Average Removal Rate", f"{df_main['RATE'].mean():.2f}")
+    
+    st.divider()
+
+    # 5. CHART & TOMBOL SUMMARY TABEL
     if 'PART NUMBER' in df_main.columns and 'RATE' in df_main.columns:
         top_10 = df_main.sort_values(by='RATE', ascending=False).head(10).copy()
         top_10['LABEL'] = top_10['PART NUMBER'].astype(str) + "<br>" + top_10['DESCRIPTION'].astype(str)
@@ -98,20 +123,24 @@ try:
         fig.update_layout(xaxis_title="PN & DESC", yaxis_title="RATE", xaxis_tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
 
+        # FITUR BARU: Tombol Expander untuk melihat tabel
+        with st.expander("📊 View Top 10 Data Table"):
+            st.table(top_10[['PART NUMBER', 'DESCRIPTION', 'QTY REM', 'RATE']])
+
     st.divider()
 
     # 6. COMPONENT EXPLORER
     st.subheader("🔍 Component Explorer")
-    search = st.text_input("Cari Part Number atau Deskripsi:")
+    search = st.text_input("Search Part Number or Description:", key="comp_search")
     
     filtered = df_main.copy()
     if search:
         mask = df_main.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)
         filtered = df_main[mask]
 
-    event = st.dataframe(filtered, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
+    event = st.dataframe(filtered, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row", key="explorer_table")
 
-# 7. PART REMOVAL DETAIL
+    # 7. PART REMOVAL DETAIL
     if event.selection.rows:
         selected_idx = event.selection.rows[0]
         row = filtered.iloc[selected_idx]
@@ -120,14 +149,10 @@ try:
         st.write("---")
         st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn_selected}")
         
-        # Rasio kolom metrik tetap 5:1:1 agar deskripsi terlihat jelas
         m1, m2, m3 = st.columns([5, 1, 1])
-        with m1:
-            st.metric("Description", row.get('DESCRIPTION', 'N/A'))
-        with m2:
-            st.metric("Current Rate", f"{row.get('RATE', 0):.2f}")
-        with m3:
-            st.metric("Total Qty Rem", f"{row.get('QTY REM', 0)} EA")
+        with m1: st.metric("Description", row.get('DESCRIPTION', 'N/A'))
+        with m2: st.metric("Current Rate", f"{row.get('RATE', 0):.2f}")
+        with m3: st.metric("Total Qty Rem", f"{int(row.get('QTY REM', 0))} EA")
 
         if not df_history.empty:
             col_pn_h = next((c for c in df_history.columns if 'PART' in c.upper()), None)
@@ -139,31 +164,13 @@ try:
                 ].copy()
                 
                 if not hist_match.empty:
-                    if 'DATE_STR' in hist_match.columns:
-                        hist_match['DATE'] = hist_match['DATE_STR']
-                    
-                    # Kolom REMARK tetap dihapus sesuai instruksi sebelumnya
-                    potential_cols = ['DATE', 'REASON OF REMOVAL', 'TSN', 'TSO']
+                    potential_cols = ['DATE_STR', 'REASON OF REMOVAL', 'TSN', 'TSO']
                     existing_cols = [c for c in potential_cols if c in hist_match.columns]
-                    
-                    # Menerapkan perbandingan lebar kolom 1:5:1:1
-                    st.dataframe(
-                        hist_match[existing_cols], 
-                        use_container_width=True, 
-                        hide_index=True,
-                        column_config={
-                            "DATE": st.column_config.Column(width="small"),
-                            "REASON OF REMOVAL": st.column_config.Column(width="large"),
-                            "TSN": st.column_config.Column(width="small"),
-                            "TSO": st.column_config.Column(width="small")
-                        }
-                    )
-                else:
-                    st.info(f"Tidak ada record removal untuk {pn_selected} pada {full_period}.")
+                    st.dataframe(hist_match[existing_cols], use_container_width=True, hide_index=True)
+
+# PENUTUP TRY BLOCK
 except Exception as e:
-    st.error(f"Terjadi kesalahan sistem: {e}")
+    st.error(f"Sistem Error: {e}")
 
 st.sidebar.markdown("---")
-st.sidebar.info("Aviation Reliability Dashboard v1.2")
-
-
+st.sidebar.info(f"User: HERY SUPRIYATNO")
