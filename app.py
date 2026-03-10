@@ -43,14 +43,16 @@ def clean_dynamic_columns(df):
 @st.cache_data
 def load_all_data(file_name, sheet_name):
     try:
+        # Load period info
         df_crit = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None, nrows=3, usecols="A")
         bln_raw = str(df_crit.iloc[1, 0]).strip().upper()
         thn_raw = str(df_crit.iloc[2, 0]).strip().replace('.0', '')
         
+        # Load Main Report
         df_main = pd.read_excel(file_name, sheet_name=sheet_name, header=None)
         df_main = clean_dynamic_columns(df_main)
         
-        # Load History - Pastikan Nama Sheet Sesuai
+        # Load History
         df_hist = pd.read_excel(file_name, sheet_name="COMPONENT REPLACEMENT")
         df_hist.columns = [str(c).strip().upper() for c in df_hist.columns]
         
@@ -63,13 +65,15 @@ def load_all_data(file_name, sheet_name):
         st.error(f"Gagal memuat data: {e}")
         return pd.DataFrame(), pd.DataFrame(), "N/A", "N/A"
 
-# 4. LOGIKA PERIODE BULAN
+# 4. LOGIKA PERIODE BULAN (Minus 1 Bulan untuk Analisis)
 def get_period_info(bulan, tahun):
     m_map = {'JANUARY':1,'FEBRUARY':2,'MARCH':3,'APRIL':4,'MAY':5,'JUNE':6,
              'JULY':7,'AUGUST':8,'SEPTEMBER':9,'OCTOBER':10,'NOVEMBER':11,'DECEMBER':12}
     m_num = m_map.get(bulan, 12)
     try:
-        curr = datetime(int(float(tahun)), m_num, 1)
+        # Gunakan float lalu int untuk menangani tahun format "2026.0"
+        y_int = int(float(tahun))
+        curr = datetime(y_int, m_num, 1)
         prev = curr - timedelta(days=1)
         p_name = [k for k, v in m_map.items() if v == prev.month][0]
         return prev.month, prev.year, p_name
@@ -82,6 +86,7 @@ FILE_PATH = 'COMPONENT_RELIABILITY_DHC6-300.xlsm'
 try:
     xls = pd.ExcelFile(FILE_PATH)
     st.sidebar.title("Navigation")
+    # Urutkan sheet agar lebih rapi di sidebar
     sheet_pilihan = st.sidebar.selectbox("Pilih Sheet Report:", xls.sheet_names)
     
     df_main, df_history, bln_ref, thn_ref = load_all_data(FILE_PATH, sheet_pilihan)
@@ -89,38 +94,48 @@ try:
     full_period = f"{target_m_name} {target_y}"
 
     st.title(f"📊 Reliability Analysis: {sheet_pilihan}")
-    st.caption(f"Reporting Period: {bln_ref} {thn_ref} | Analysis Data: {full_period}")
+    st.caption(f"Reporting Month: {bln_ref} {thn_ref} | Analysis Period: {full_period}")
 
-    # 5. CHART
+    # 5. CHART TOP 10
     if 'PART NUMBER' in df_main.columns and 'RATE' in df_main.columns:
-        top_10 = df_main.sort_values(by='RATE', ascending=False).head(10).copy()
-        top_10['LABEL'] = top_10['PART NUMBER'].astype(str) + "<br>" + top_10['DESCRIPTION'].astype(str)
+        # Filter hanya yang memiliki RATE > 0 untuk grafik yang lebih bersih
+        df_chart = df_main[df_main['RATE'] > 0].copy()
+        top_10 = df_chart.sort_values(by='RATE', ascending=False).head(10)
         
-        st.subheader(f"📈 Top 10 Removal Rate Comparison ({full_period})")
-        fig = px.bar(top_10, x='LABEL', y='RATE', text_auto='.2f')
-        fig.update_traces(marker_color='#F2B200', width=0.4) 
-        fig.update_layout(xaxis_title="PN & DESC", yaxis_title="RATE", xaxis_tickangle=-45)
-        st.plotly_chart(fig, use_container_width=True)
+        if not top_10.empty:
+            top_10['LABEL'] = top_10['PART NUMBER'].astype(str) + "<br>" + top_10['DESCRIPTION'].astype(str)
+            
+            st.subheader(f"📈 Top 10 Removal Rate Comparison ({full_period})")
+            fig = px.bar(top_10, x='LABEL', y='RATE', text_auto='.2f')
+            fig.update_traces(marker_color='#F2B200', width=0.4) 
+            fig.update_layout(xaxis_title="PN & DESC", yaxis_title="RATE", xaxis_tickangle=-45)
+            st.plotly_chart(fig, use_container_width=True)
 
-        # TOMBOL VIEW DATA TABLE (Expander)
-        with st.expander("📊 Click to View Top 10 Data Table"):
-            st.table(top_10[['PART NUMBER', 'DESCRIPTION', 'QTY REM', 'RATE']])
+            with st.expander("📊 Click to View Top 10 Data Table"):
+                st.table(top_10[['PART NUMBER', 'DESCRIPTION', 'QTY REM', 'RATE']])
+        else:
+            st.info("Tidak ada data dengan removal rate > 0 pada sheet ini.")
 
     st.divider()
 
     # 6. COMPONENT EXPLORER
     st.subheader("🔍 Component Explorer")
-    search = st.text_input("Cari Part Number atau Deskripsi:")
+    search = st.text_input("Cari Part Number atau Deskripsi:", placeholder="Contoh: BRAKE atau 412-...")
     
     filtered = df_main.copy()
     if search:
         mask = df_main.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)
         filtered = df_main[mask]
 
-    # SELECTION RERUN
-    event = st.dataframe(filtered, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
+    event = st.dataframe(
+        filtered, 
+        use_container_width=True, 
+        hide_index=True, 
+        on_select="rerun", 
+        selection_mode="single-row"
+    )
 
-    # 7. PART REMOVAL DETAIL (HARUS DI DALAM BLOK TRY)
+    # 7. PART REMOVAL DETAIL
     if event.selection.rows:
         selected_idx = event.selection.rows[0]
         row = filtered.iloc[selected_idx]
@@ -144,7 +159,6 @@ try:
                 ].copy()
                 
                 if not hist_match.empty:
-                    # Map DATE_STR ke DATE agar tampilan cantik
                     hist_match['DATE'] = hist_match['DATE_STR']
                     potential_cols = ['DATE', 'REASON OF REMOVAL', 'TSN', 'TSO']
                     existing_cols = [c for c in potential_cols if c in hist_match.columns]
@@ -154,10 +168,10 @@ try:
                         use_container_width=True, 
                         hide_index=True,
                         column_config={
-                            "DATE": st.column_config.Column(width="small"),
-                            "REASON OF REMOVAL": st.column_config.Column(width="large"),
-                            "TSN": st.column_config.Column(width="small"),
-                            "TSO": st.column_config.Column(width="small")
+                            "DATE": st.column_config.Column("Date", width="small"),
+                            "REASON OF REMOVAL": st.column_config.Column("Reason of Removal", width="large"),
+                            "TSN": st.column_config.Column("TSN", width="small"),
+                            "TSO": st.column_config.Column("TSO", width="small")
                         }
                     )
                 else:
