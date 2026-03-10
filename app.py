@@ -13,18 +13,18 @@ st.markdown("""
     [data-testid="stMetricValue"] { font-size: 22px !important; }
     .stMetric { 
         background-color: #ffffff; 
-        padding: 10px; 
+        padding: 15px; 
         border-radius: 10px; 
         box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
+        text-align: center;
     }
-    /* Memaksa semua isi tabel menjadi rata tengah (Center) */
     [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th {
         text-align: center !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. FUNGSI PEMBERSIH DATA DINAMIS
+# 2. FUNGSI PEMBERSIH DATA
 def clean_dynamic_columns(df):
     for i in range(len(df)):
         row_values = [str(val).upper() for val in df.iloc[i].values]
@@ -34,19 +34,19 @@ def clean_dynamic_columns(df):
             df.columns = [str(c).strip().upper() for c in new_cols]
             break
     df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
-    
-    # FIX: Pastikan tidak ada NaN yang menyebabkan error konversi
-    df = df.fillna(0)
+    df = df.fillna(0) # Proteksi NaN
     
     if 'RATE' in df.columns:
         df['RATE'] = pd.to_numeric(df['RATE'], errors='coerce').fillna(0)
+    if 'QTY REM' in df.columns:
+        df['QTY REM'] = pd.to_numeric(df['QTY REM'], errors='coerce').fillna(0)
+        
     return df
 
 # 3. FUNGSI LOAD DATA
 @st.cache_data
 def load_all_data(file_name, sheet_name):
     try:
-        # Ambil referensi Bulan/Tahun dari sheet utama
         df_crit = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None, nrows=3, usecols="A")
         bln_raw = str(df_crit.iloc[1, 0]).strip().upper()
         thn_raw = str(df_crit.iloc[2, 0]).strip().replace('.0', '')
@@ -54,8 +54,7 @@ def load_all_data(file_name, sheet_name):
         df_main = pd.read_excel(file_name, sheet_name=sheet_name, header=None)
         df_main = clean_dynamic_columns(df_main)
         
-        # Load History dari sheet ke-3 (Component Replacement)
-        df_hist = pd.read_excel(file_name, sheet_name=2) # Menggunakan index agar lebih aman
+        df_hist = pd.read_excel(file_name, sheet_name=2) 
         df_hist.columns = [str(c).strip().upper() for c in df_hist.columns]
         df_hist = df_hist.fillna(0)
         
@@ -68,7 +67,7 @@ def load_all_data(file_name, sheet_name):
         st.error(f"Gagal memuat data: {e}")
         return pd.DataFrame(), pd.DataFrame(), "N/A", "N/A"
 
-# 4. LOGIKA PERIODE BULAN
+# 4. LOGIKA PERIODE
 def get_period_info(bulan, tahun):
     m_map = {'JANUARY':1,'FEBRUARY':2,'MARCH':3,'APRIL':4,'MAY':5,'JUNE':6,
              'JULY':7,'AUGUST':8,'SEPTEMBER':9,'OCTOBER':10,'NOVEMBER':11,'DECEMBER':12}
@@ -82,14 +81,12 @@ def get_period_info(bulan, tahun):
     except:
         return 11, 2025, "NOVEMBER"
 
-# --- MAIN APP START ---
+# --- MAIN APP ---
 FILE_PATH = 'COMPONENT_RELIABILITY_DHC6-300.xlsm'
 
 try:
     xls = pd.ExcelFile(FILE_PATH)
     st.sidebar.title("Navigation")
-    
-    # Memberikan key unik pada selectbox
     sheet_pilihan = st.sidebar.selectbox("Pilih Sheet Report:", xls.sheet_names, key="main_nav")
     
     df_main, df_history, bln_ref, thn_ref = load_all_data(FILE_PATH, sheet_pilihan)
@@ -97,7 +94,20 @@ try:
     full_period = f"{target_m_name} {target_y}"
 
     st.title(f"📊 Reliability Analysis: {sheet_pilihan}")
-    st.caption(f"Reporting Period: {bln_ref} {thn_ref} | Analysis Data: {full_period}")
+    st.caption(f"Reporting Period: {bln_ref} {thn_ref} | Data Analysis: {full_period}")
+
+    # --- BARU: TOMBOL SUMMARY METRICS ---
+    if not df_main.empty:
+        total_items = len(df_main)
+        total_removals = int(df_main['QTY REM'].sum())
+        avg_rate = df_main['RATE'].mean()
+        
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Total Components", f"{total_items} Items")
+        c2.metric("Total Monthly Removals", f"{total_removals} EA")
+        c3.metric("Average Removal Rate", f"{avg_rate:.2f}")
+    
+    st.divider()
 
     # 5. CHART
     if 'PART NUMBER' in df_main.columns and 'RATE' in df_main.columns:
@@ -121,16 +131,9 @@ try:
         mask = df_main.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)
         filtered = df_main[mask]
 
-    event = st.dataframe(
-        filtered, 
-        use_container_width=True, 
-        hide_index=True, 
-        on_select="rerun", 
-        selection_mode="single-row",
-        key="explorer_table"
-    )
+    event = st.dataframe(filtered, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row", key="explorer_table")
 
-    # 7. PART REMOVAL DETAIL (RASIO 5:1:1)
+    # 7. PART REMOVAL DETAIL
     if event.selection.rows:
         selected_idx = event.selection.rows[0]
         row = filtered.iloc[selected_idx]
@@ -140,12 +143,9 @@ try:
         st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn_selected}")
         
         m1, m2, m3 = st.columns([5, 1, 1])
-        with m1:
-            st.metric("Description", row.get('DESCRIPTION', 'N/A'))
-        with m2:
-            st.metric("Current Rate", f"{row.get('RATE', 0):.2f}")
-        with m3:
-            st.metric("Total Qty Rem", f"{int(row.get('QTY REM', 0))} EA")
+        with m1: st.metric("Description", row.get('DESCRIPTION', 'N/A'))
+        with m2: st.metric("Current Rate", f"{row.get('RATE', 0):.2f}")
+        with m3: st.metric("Total Qty Rem", f"{int(row.get('QTY REM', 0))} EA")
 
         if not df_history.empty:
             col_pn_h = next((c for c in df_history.columns if 'PART' in c.upper()), None)
@@ -157,27 +157,14 @@ try:
                 ].copy()
                 
                 if not hist_match.empty:
-                    # Menampilkan detail tanpa kolom REMARK
                     potential_cols = ['DATE_STR', 'REASON OF REMOVAL', 'TSN', 'TSO']
                     existing_cols = [c for c in potential_cols if c in hist_match.columns]
-                    
-                    st.dataframe(
-                        hist_match[existing_cols], 
-                        use_container_width=True, 
-                        hide_index=True,
-                        column_config={
-                            "DATE_STR": st.column_config.Column("DATE", width="small"),
-                            "REASON OF REMOVAL": st.column_config.Column(width="large"),
-                            "TSN": st.column_config.Column(width="small"),
-                            "TSO": st.column_config.Column(width="small")
-                        }
-                    )
+                    st.dataframe(hist_match[existing_cols], use_container_width=True, hide_index=True)
                 else:
                     st.info(f"Tidak ada record removal untuk {pn_selected} pada {full_period}.")
 
-# PENUTUP BLOK EXCEPT UNTUK KEAMANAN SYNTAX
 except Exception as e:
     st.error(f"Terjadi kesalahan sistem: {e}")
 
 st.sidebar.markdown("---")
-st.sidebar.info(f"Logged in as: HERY SUPRIYATNO")
+st.sidebar.info(f"User: HERY SUPRIYATNO")
