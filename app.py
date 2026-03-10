@@ -1,8 +1,3 @@
-Beres, Pak Hery. Kolom REMARK sudah saya hapus sepenuhnya dari tabel detail. Selain itu, saya sudah merapikan struktur try-except agar tidak ada lagi SyntaxError seperti yang muncul pada tangkapan layar Bapak sebelumnya.
-
-Berikut adalah kode lengkap yang sudah diperbarui dengan rasio kolom 5:1:1 dan tanpa kolom REMARK:
-
-Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -159,3 +154,4 @@ except Exception as e:
 
 st.sidebar.markdown("---")
 st.sidebar.info("Aviation Reliability Dashboard v1.2")
+
