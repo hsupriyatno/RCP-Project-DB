@@ -20,7 +20,7 @@ def clean_dynamic_columns(df):
         df['RATE'] = pd.to_numeric(df['RATE'], errors='coerce').fillna(0)
     return df
 
-# 3. FUNGSI LOAD DATA
+# 3. FUNGSI LOAD DATA (Format Tanggal dd-mm-yyyy)
 @st.cache_data
 def load_all_data(file_name, sheet_name):
     try:
@@ -82,7 +82,7 @@ try:
 
     st.divider()
 
-    # 5. EXPLORER (Tanpa Indeks)
+    # 5. COMPONENT EXPLORER
     st.subheader("🔍 Component Explorer")
     search = st.text_input("Search Part Number or Description:")
     filtered = df_main.copy()
@@ -90,6 +90,7 @@ try:
         mask = df_main.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)
         filtered = df_main[mask]
 
+    # Menghilangkan kolom indeks paling kiri
     event = st.dataframe(filtered, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
 
     # 6. PART REMOVAL DETAIL (SEMUA RATA KIRI)
@@ -99,10 +100,10 @@ try:
         pn_selected = str(row['PART NUMBER']).strip()
         
         st.write("---")
-        # Header Rata Kiri
+        # Judul Rata Kiri
         st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn_selected}")
         
-        # Proporsi 1:5:1:1 dengan alignment default (Kiri)
+        # Proporsi Kolom 1:5:1:1 dengan alignment default (Kiri)
         _, c1, c2, c3 = st.columns([1, 5, 1, 1]) 
         c1.metric("Description", row.get('DESCRIPTION', 'N/A'))
         c2.metric("Current Rate", f"{row.get('RATE', 0):.2f}")
@@ -121,15 +122,14 @@ try:
                     if 'DATE_STR' in hist_match.columns:
                         hist_match['DATE'] = hist_match['DATE_STR']
                     
-                    # Kolom teknis utama tanpa REMARK
+                    # Kolom teknis tanpa REMARK
                     potential_cols = ['DATE', 'REASON OF REMOVAL', 'TSN', 'TSO']
                     existing_cols = [c for c in potential_cols if c in hist_match.columns]
                     
-                    # Menampilkan tabel: Header dan Isi otomatis Rata Kiri
+                    # Menampilkan tabel dengan alignment standar (Kiri) dan tanpa indeks
                     st.dataframe(hist_match[existing_cols], use_container_width=True, hide_index=True)
                 else:
                     st.info(f"Tidak ada record removal untuk {pn_selected} pada {full_period}.")
 
 except Exception as e:
     st.error(f"Sistem Error: {e}")
-
