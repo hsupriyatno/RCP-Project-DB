@@ -1,10 +1,3 @@
-Paham, Pak Hery. Bapak ingin tombol yang bisa menampilkan/menyembunyikan tabel data pendukung tepat di bawah grafik batang (Top 10), agar dashboard tidak terlihat terlalu penuh jika datanya sedang tidak dibutuhkan.
-
-Error SyntaxError: expected 'except' or 'finally' block pada screenshot Bapak terjadi karena ada struktur try yang tidak ditutup dengan benar di bagian akhir kode.
-
-Berikut adalah kode yang sudah saya perbaiki. Saya tambahkan fitur "Show Data Table" menggunakan st.expander tepat di bawah chart:
-
-Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -174,3 +167,4 @@ except Exception as e:
 
 st.sidebar.markdown("---")
 st.sidebar.info(f"User: HERY SUPRIYATNO")
+
