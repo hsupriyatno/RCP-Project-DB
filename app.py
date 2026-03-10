@@ -132,23 +132,27 @@ try:
         selection_mode="single-row"
     )
 
-# 7. PART REMOVAL DETAIL (Proporsi Baru: Deskripsi Lebih Lebar)
+# 7. PART REMOVAL DETAIL (Polesan Akhir: Proporsi 2:1:1)
+    if event.selection.rows:
+        selected_idx = event.selection.rows[0]
+        row = filtered.iloc[selected_idx]
+        pn_selected = str(row['PART NUMBER']).strip()
+        
         st.write("---")
         st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn_selected}")
         
-        # Mengubah rasio kolom menjadi [2, 1, 1] agar Description punya ruang lebih luas
-        c1, c2, c3 = st.columns([2, 1, 1]) 
+        # Mengatur kolom: Description (50%), Rate (25%), Qty (25%)
+        m1, m2, m3 = st.columns([2, 1, 1]) 
         
-        c1.metric("Description", row.get('DESCRIPTION', 'N/A'))
-        c2.metric("Current Rate", f"{row.get('RATE', 0):.2f}")
-        c3.metric("Total Qty Rem", f"{row.get('QTY REM', 0)} EA")
+        # Menggunakan .get() untuk keamanan data jika kolom kosong
+        m1.metric("Description", row.get('DESCRIPTION', 'N/A'))
+        m2.metric("Current Rate", f"{row.get('RATE', 0):.2f}")
+        m3.metric("Total Qty Rem", f"{row.get('QTY REM', 0)} EA")
 
+        # Tabel history tetap di bawah dengan format dd-mm-yyyy dan tanpa indeks
         if not df_history.empty:
-            # Cari kolom P/N di history secara fleksibel
             col_pn_h = next((c for c in df_history.columns if 'PART' in c.upper()), None)
-            
             if col_pn_h:
-                # Filter data berdasarkan P/N dan Periode
                 hist_match = df_history[
                     (df_history[col_pn_h].astype(str).str.strip() == pn_selected) & 
                     (df_history['DATE'].dt.month == target_m) & 
@@ -156,11 +160,9 @@ try:
                 ].copy()
                 
                 if not hist_match.empty:
-                    # Gunakan format tanggal dd-mm-yyyy
                     if 'DATE_STR' in hist_match.columns:
                         hist_match['DATE'] = hist_match['DATE_STR']
                     
-                    # Tampilkan hanya kolom yang ada di excel
                     potential_cols = ['DATE', 'REASON OF REMOVAL', 'REMARK', 'TSN', 'TSO']
                     existing_cols = [c for c in potential_cols if c in hist_match.columns]
                     
@@ -176,5 +178,6 @@ except Exception as e:
 # Footer
 st.sidebar.markdown("---")
 st.sidebar.info("Aviation Reliability Dashboard v1.2")
+
 
 
