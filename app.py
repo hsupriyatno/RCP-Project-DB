@@ -1,3 +1,8 @@
+Waduh, sepertinya ada teks penjelasan atau komentar yang tidak sengaja masuk ke dalam baris kode Python Bapak, sehingga menyebabkan SyntaxError karena Python mencoba membaca teks biasa sebagai kode program. Selain itu, error 'DATE' muncul karena sistem tidak menemukan kolom tanggal yang sesuai di sheet history.
+
+Berikut adalah kode yang sudah saya bersihkan total. Saya juga menambahkan proteksi agar jika kolom REMARK atau DATE tidak ada, dashboard tetap jalan dan tidak memunculkan kotak merah.
+
+Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -34,7 +39,7 @@ def clean_dynamic_columns(df):
             df.columns = [str(c).strip().upper() for c in new_cols]
             break
     df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
-    df = df.fillna(0) # Proteksi float NaN to integer
+    df = df.fillna(0) # Proteksi agar tidak error float NaN
     
     if 'RATE' in df.columns:
         df['RATE'] = pd.to_numeric(df['RATE'], errors='coerce').fillna(0)
@@ -54,13 +59,15 @@ def load_all_data(file_name, sheet_name):
         df_main = pd.read_excel(file_name, sheet_name=sheet_name, header=None)
         df_main = clean_dynamic_columns(df_main)
         
+        # Load History (Sheet ke-3)
         df_hist = pd.read_excel(file_name, sheet_name=2) 
         df_hist.columns = [str(c).strip().upper() for c in df_hist.columns]
-        df_hist = df_hist.fillna(0)
         
-        if 'DATE' in df_hist.columns:
-            df_hist['DATE'] = pd.to_datetime(df_hist['DATE'], errors='coerce')
-            df_hist['DATE_STR'] = df_hist['DATE'].dt.strftime('%d-%m-%Y')
+        # Cari kolom tanggal secara fleksibel
+        date_col = next((c for c in df_hist.columns if 'DATE' in c), None)
+        if date_col:
+            df_hist['DATE_DT'] = pd.to_datetime(df_hist[date_col], errors='coerce')
+            df_hist['DATE_STR'] = df_hist['DATE_DT'].dt.strftime('%d-%m-%Y')
             
         return df_main, df_hist, bln_raw, thn_raw
     except Exception as e:
@@ -94,7 +101,7 @@ try:
     full_period = f"{target_m_name} {target_y}"
 
     st.title(f"📊 Reliability Analysis: {sheet_pilihan}")
-    st.caption(f"Reporting Period: {bln_ref} {thn_ref} | Data Analysis: {full_period}")
+    st.caption(f"Period: {bln_ref} {thn_ref} | Analysis: {full_period}")
 
     # Summary Metrics
     if not df_main.empty:
@@ -105,26 +112,25 @@ try:
     
     st.divider()
 
-    # 5. CHART & TOMBOL SUMMARY TABEL
+    # 5. CHART & SUMMARY TABLE
     if 'PART NUMBER' in df_main.columns and 'RATE' in df_main.columns:
         top_10 = df_main.sort_values(by='RATE', ascending=False).head(10).copy()
         top_10['LABEL'] = top_10['PART NUMBER'].astype(str) + "<br>" + top_10['DESCRIPTION'].astype(str)
         
-        st.subheader(f"📈 Top 10 Removal Rate Comparison ({full_period})")
+        st.subheader(f"📈 Top 10 Removal Rate ({full_period})")
         fig = px.bar(top_10, x='LABEL', y='RATE', text_auto='.2f')
         fig.update_traces(marker_color='#F2B200', width=0.4) 
         fig.update_layout(xaxis_title="PN & DESC", yaxis_title="RATE", xaxis_tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
 
-        # FITUR BARU: Tombol Expander untuk melihat tabel
-        with st.expander("📊 View Top 10 Data Table"):
+        with st.expander("📊 Click to View Top 10 Data Table"):
             st.table(top_10[['PART NUMBER', 'DESCRIPTION', 'QTY REM', 'RATE']])
 
     st.divider()
 
     # 6. COMPONENT EXPLORER
     st.subheader("🔍 Component Explorer")
-    search = st.text_input("Search Part Number or Description:", key="comp_search")
+    search = st.text_input("Search PN/Desc:", key="comp_search")
     
     filtered = df_main.copy()
     if search:
@@ -147,24 +153,26 @@ try:
         with m2: st.metric("Current Rate", f"{row.get('RATE', 0):.2f}")
         with m3: st.metric("Total Qty Rem", f"{int(row.get('QTY REM', 0))} EA")
 
+        # Tampilkan History dengan proteksi kolom
         if not df_history.empty:
-            col_pn_h = next((c for c in df_history.columns if 'PART' in c.upper()), None)
-            if col_pn_h:
+            col_pn_h = next((c for c in df_history.columns if 'PART' in c), None)
+            if col_pn_h and 'DATE_DT' in df_history.columns:
                 hist_match = df_history[
                     (df_history[col_pn_h].astype(str).str.strip() == pn_selected) & 
-                    (df_history['DATE'].dt.month == target_m) & 
-                    (df_history['DATE'].dt.year == target_y)
+                    (df_history['DATE_DT'].dt.month == target_m) & 
+                    (df_history['DATE_DT'].dt.year == target_y)
                 ].copy()
                 
                 if not hist_match.empty:
-                    potential_cols = ['DATE_STR', 'REASON OF REMOVAL', 'TSN', 'TSO']
-                    existing_cols = [c for c in potential_cols if c in hist_match.columns]
+                    # Ambil hanya kolom yang ada saja (biar tidak error 'DATE' atau 'REMARK')
+                    display_cols = ['DATE_STR', 'REASON OF REMOVAL', 'TSN', 'TSO']
+                    existing_cols = [c for c in display_cols if c in hist_match.columns]
                     st.dataframe(hist_match[existing_cols], use_container_width=True, hide_index=True)
+                else:
+                    st.info(f"No removal records for {pn_selected} in {full_period}.")
 
-# PENUTUP TRY BLOCK
 except Exception as e:
     st.error(f"Sistem Error: {e}")
 
 st.sidebar.markdown("---")
-st.sidebar.info(f"User: HERY SUPRIYATNO")
-
+st.sidebar.info("User: HERY SUPRIYATNO")
