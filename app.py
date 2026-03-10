@@ -17,23 +17,8 @@ st.markdown("""
         border-radius: 10px; 
         box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
     }
-    /* Style tabel statis agar rapi dan tidak bergerak saat disentuh di HP */
-    .static-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-family: sans-serif;
-        font-size: 14px;
-    }
-    .static-table th {
-        background-color: #f8f9fa;
-        text-align: left;
-        padding: 12px;
-        border-bottom: 2px solid #dee2e6;
-    }
-    .static-table td {
-        padding: 10px;
-        border-bottom: 1px solid #dee2e6;
-    }
+    /* Header tabel rata kiri agar rapi */
+    [data-testid="stDataFrame"] div[data-testid="stTable"] th { text-align: left !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -47,7 +32,7 @@ def clean_dynamic_columns(df):
             df.columns = [str(c).strip().upper() for c in new_cols]
             break
     df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
-    df = df.fillna(0)
+    df = df.fillna(0) 
     if 'RATE' in df.columns:
         df['RATE'] = pd.to_numeric(df['RATE'], errors='coerce').fillna(0)
     if 'QTY REM' in df.columns:
@@ -105,7 +90,7 @@ try:
     st.title(f"📊 Reliability Analysis: {sheet_pilihan}")
     st.caption(f"Reporting Period: {bln_ref} {thn_ref} | Analysis Data: {full_period}")
 
-    # 5. CHART & STABLE TABLE
+    # 5. CHART (DIBUAT STABIL UNTUK HP)
     if 'PART NUMBER' in df_main.columns and 'RATE' in df_main.columns:
         top_10 = df_main.sort_values(by='RATE', ascending=False).head(10).copy()
         top_10['LABEL'] = top_10['PART NUMBER'].astype(str) + "<br>" + top_10['DESCRIPTION'].astype(str)
@@ -113,13 +98,28 @@ try:
         st.subheader(f"📈 Top 10 Removal Rate Comparison ({full_period})")
         fig = px.bar(top_10, x='LABEL', y='RATE', text_auto='.2f')
         fig.update_traces(marker_color='#F2B200', width=0.4) 
-        fig.update_layout(xaxis_title="PN & DESC", yaxis_title="RATE", xaxis_tickangle=-45)
-        st.plotly_chart(fig, use_container_width=True)
+        fig.update_layout(
+            xaxis_title="PN & DESC", 
+            yaxis_title="RATE", 
+            xaxis_tickangle=-45,
+            dragmode=False, # Mematikan zoom drag agar stabil di HP
+            hovermode="closest"
+        )
+        
+        # MENGGUNAKAN CONFIG UNTUK MEMATIKAN INTERAKSI YANG MENGGANGGU DI HP
+        st.plotly_chart(
+            fig, 
+            use_container_width=True, 
+            config={
+                'staticPlot': False, # Tetap bisa hover (melihat angka)
+                'scrollZoom': False, # Matikan scroll zoom
+                'displayModeBar': False, # Sembunyikan floating bar (zoom, pan, dll)
+                'doubleClick': 'reset' # Double click hanya reset, bukan zoom
+            }
+        )
 
         with st.expander("📊 Click to View Top 10 Data Table"):
-            # Perubahan: Menggunakan HTML Table agar stabil di HP dan tanpa index
-            html_static = top_10[['PART NUMBER', 'DESCRIPTION', 'QTY REM', 'RATE']].to_html(index=False, classes='static-table')
-            st.markdown(html_static, unsafe_allow_html=True)
+            st.dataframe(top_10[['PART NUMBER', 'DESCRIPTION', 'QTY REM', 'RATE']], use_container_width=True, hide_index=True)
 
     st.divider()
 
@@ -132,7 +132,6 @@ try:
         mask = df_main.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)
         filtered = df_main[mask]
 
-    # SELECTION RERUN (Tetap dipertahankan untuk interaksi detail)
     event = st.dataframe(filtered, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
 
     # 7. PART REMOVAL DETAIL
@@ -166,10 +165,12 @@ try:
                     st.dataframe(
                         hist_match[existing_cols], 
                         use_container_width=True, 
-                        hide_index=True, # Menghapus index di sini juga
+                        hide_index=True,
                         column_config={
                             "DATE": st.column_config.Column(width="small"),
-                            "REASON OF REMOVAL": st.column_config.Column(width="large")
+                            "REASON OF REMOVAL": st.column_config.Column(width="large"),
+                            "TSN": st.column_config.Column(width="small"),
+                            "TSO": st.column_config.Column(width="small")
                         }
                     )
                 else:
@@ -179,4 +180,4 @@ except Exception as e:
     st.error(f"Terjadi kesalahan sistem: {e}")
 
 st.sidebar.markdown("---")
-st.sidebar.info("Aviation Reliability Dashboard v1.3 | User: Hery Supriyatno")
+st.sidebar.info("Aviation Reliability Dashboard v1.4 | User: Hery Supriyatno")
