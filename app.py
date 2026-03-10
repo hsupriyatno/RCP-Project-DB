@@ -39,6 +39,7 @@ def load_reliability_data(file_name, sheet_name):
 @st.cache_data
 def load_replacement_history(file_name):
     try:
+        # Pastikan menggunakan nama sheet COMPONENT REPLACEMENT
         df_hist = pd.read_excel(file_name, sheet_name="COMPONENT REPLACEMENT", header=0)
         df_hist.columns = [str(col).strip() for col in df_hist.columns]
         if 'DATE' in df_hist.columns:
@@ -65,7 +66,7 @@ try:
     xls = pd.ExcelFile(FILE_PATH)
     
     # Sidebar Navigation
-    st.sidebar.image("https://www.airfastindonesia.com/images/logo.png", width=150) # Opsional: Link logo Airfast
+    st.sidebar.image("https://www.airfastindonesia.com/images/logo.png", width=150)
     st.sidebar.title("Navigation")
     sheet_pilihan = st.sidebar.selectbox("Select Report Sheet:", xls.sheet_names)
     
@@ -78,21 +79,21 @@ try:
     st.title(f"📊 Reliability Analysis: {sheet_pilihan}")
     st.caption(f"Reporting Period: {bln_ref} {thn_ref} | Analysis Data: {target_m_name} {target_y}")
 
-    # 4. SECTION: HIGHLIGHT TOP 10 (Hanya muncul jika ada kolom RATE)
+    # 4. SECTION: CHART & HIGHLIGHT (Pindah ke Atas)
     if 'RATE' in df_main.columns and 'PART NUMBER' in df_main.columns:
         top_10 = df_main.sort_values(by='RATE', ascending=False).head(10)
         
-        col_a, col_b = st.columns([1, 1])
-        with col_a:
-            st.subheader(f"🏆 Top 10 Highest Removal Rate")
+        st.subheader(f"📈 Top 10 Removal Rate Comparison ({target_m_name})")
+        # Menggunakan kolom penuh agar chart terlihat jelas di atas
+        fig = px.bar(top_10, x='PART NUMBER', y='RATE', 
+                     color='RATE', color_continuous_scale='Reds',
+                     text_auto='.4f')
+        fig.update_layout(xaxis_tickangle=-45)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Tabel Ringkasan di bawah chart
+        with st.expander("View Top 10 Summary Table"):
             st.dataframe(top_10[['PART NUMBER', 'DESCRIPTION', 'RATE']], use_container_width=True, hide_index=True)
-            
-        with col_b:
-            fig = px.bar(top_10, x='RATE', y='PART NUMBER', orientation='h', 
-                         color='RATE', color_continuous_scale='Reds',
-                         title=f"Removal Rate Comparison ({target_m_name})")
-            fig.update_layout(yaxis={'categoryorder':'total ascending'})
-            st.plotly_chart(fig, use_container_width=True)
 
     st.divider()
 
@@ -113,7 +114,7 @@ try:
         selection_mode="single-row"
     )
 
-    # Detail View saat diklik
+    # Detail View saat diklik (Drill-down)
     if event.selection.rows:
         selected_idx = event.selection.rows[0]
         row = filtered_df.iloc[selected_idx]
@@ -129,15 +130,21 @@ try:
         m3.metric("Total Qty Rem", f"{row.get('QTY REM', 0)} EA")
 
         # History Table (Filtered by Month-1)
-        if not df_history.empty and 'PART NUMBER OFF' in df_history.columns:
+        if not df_history.empty:
+            # Cari kolom part number di history (antisipasi beda nama kolom)
+            col_pn_hist = 'PART NUMBER OFF' if 'PART NUMBER OFF' in df_history.columns else 'PART NUMBER'
+            
             hist_match = df_history[
-                (df_history['PART NUMBER OFF'].astype(str).str.strip() == pn_selected) &
+                (df_history[col_pn_hist].astype(str).str.strip() == pn_selected) &
                 (df_history['DATE'].dt.month == target_m_num) &
                 (df_history['DATE'].dt.year == target_y)
             ]
             
+            show_cols = ['DATE', 'REASON OF REMOVAL', 'REMARK', 'TSN', 'TSO']
+            available = [c for c in show_cols if c in df_history.columns]
+            
             if not hist_match.empty:
-                st.table(hist_match[['DATE', 'REASON OF REMOVAL', 'REMARK', 'TSN', 'TSO']])
+                st.table(hist_match[available])
             else:
                 st.warning(f"No removal records found in {target_m_name} {target_y} for this part.")
 
