@@ -39,7 +39,7 @@ try:
         use_container_width=True, 
         hide_index=True,
         on_select="rerun",  
-        selection_mode="single_row"
+        selection_mode="single-row" # GANTI '_' MENJADI '-' DISINI
     )
 
     # --- LOGIKA DETAIL (POPUP) ---
@@ -83,6 +83,7 @@ try:
 except Exception as e:
     st.error(f"Terjadi kesalahan: {e}")
     st.info("Pastikan file Excel sudah di-upload dan format kolom sesuai.")
+
 
 
 
