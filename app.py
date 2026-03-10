@@ -49,15 +49,15 @@ try:
     try:
         # Cek apakah kolom yang dibutuhkan ada di sheet ini
         # Sesuaikan 'PART NUMBER' dan 'RATE' dengan judul kolom di Excel Bapak
+# --- BAGIAN GRAFIK ---
         if 'PART NUMBER' in display_data.columns and 'RATE' in display_data.columns:
-            # Ambil 10 data teratas untuk grafik
             chart_data = display_data.head(10)
             
             fig = px.bar(
                 chart_data, 
                 x='PART NUMBER', 
                 y='RATE', 
-                text='RATE',  # MENAMPILKAN ANGKA DI ATAS BATANG
+                text='RATE',
                 title=f"Top 10 Components on {sheet_pilihan}",
                 color='RATE',
                 labels={'RATE': 'Removal Rate', 'PART NUMBER': 'P/N'},
@@ -65,24 +65,15 @@ try:
                 template='plotly_white'
             )
             
-            # Mengatur agar angka label terlihat rapi (di luar batang) dan dibulatkan
             fig.update_traces(texttemplate='%{text:.2f}', textposition='outside')
             
-            # Menampilkan grafik
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Menampilkan grafik di Streamlit
-            st.plotly_chart(fig, use_container_width=True)
+            # PAKAI SATU INI SAJA, Pastikan sejajar dengan baris fig.update_traces
+            st.plotly_chart(fig, use_container_width=True, key=f"chart_{sheet_pilihan}")
         else:
             st.info("💡 Grafik otomatis akan muncul jika sheet ini memiliki kolom 'PART NUMBER' dan 'RATE'.")
-            
+
     except Exception as e:
         st.warning(f"Tidak dapat membuat grafik pada sheet ini: {e}")
 
 except Exception as e:
     st.error(f"Terjadi kesalahan: {e}")
-    st.info("Pastikan file Excel dan library sudah sesuai.")
-# Tambahkan parameter key agar setiap grafik punya ID unik
-            # Kita gunakan nama sheet_pilihan sebagai ID uniknya
-            st.plotly_chart(fig, use_container_width=True, key=f"chart_{sheet_pilihan}")
-
