@@ -19,6 +19,9 @@ st.markdown("""
     }
     /* Header tabel rata kiri agar rapi */
     [data-testid="stDataFrame"] div[data-testid="stTable"] th { text-align: left !important; }
+    
+    /* Perbaikan scroll di HP agar tidak mudah trigger klik */
+    [data-testid="stDataFrame"] { touch-action: pan-y; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -50,7 +53,6 @@ def load_all_data(file_name, sheet_name):
         df_main = pd.read_excel(file_name, sheet_name=sheet_name, header=None)
         df_main = clean_dynamic_columns(df_main)
         
-        # Load History - Pastikan Nama Sheet Sesuai
         df_hist = pd.read_excel(file_name, sheet_name="COMPONENT REPLACEMENT")
         df_hist.columns = [str(c).strip().upper() for c in df_hist.columns]
         
@@ -102,9 +104,9 @@ try:
         fig.update_layout(xaxis_title="PN & DESC", yaxis_title="RATE", xaxis_tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
 
-        # TOMBOL VIEW DATA TABLE (Expander)
         with st.expander("📊 Click to View Top 10 Data Table"):
-            st.table(top_10[['PART NUMBER', 'DESCRIPTION', 'QTY REM', 'RATE']])
+            # Menggunakan dataframe agar hide_index bekerja sempurna
+            st.dataframe(top_10[['PART NUMBER', 'DESCRIPTION', 'QTY REM', 'RATE']], use_container_width=True, hide_index=True)
 
     st.divider()
 
@@ -117,10 +119,16 @@ try:
         mask = df_main.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)
         filtered = df_main[mask]
 
-    # SELECTION RERUN
-    event = st.dataframe(filtered, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
+    # SELECTION RERUN - Ditambahkan selection_mode eksplisit
+    event = st.dataframe(
+        filtered, 
+        use_container_width=True, 
+        hide_index=True, 
+        on_select="rerun", 
+        selection_mode="single-row"
+    )
 
-    # 7. PART REMOVAL DETAIL (HARUS DI DALAM BLOK TRY)
+    # 7. PART REMOVAL DETAIL
     if event.selection.rows:
         selected_idx = event.selection.rows[0]
         row = filtered.iloc[selected_idx]
@@ -144,7 +152,6 @@ try:
                 ].copy()
                 
                 if not hist_match.empty:
-                    # Map DATE_STR ke DATE agar tampilan cantik
                     hist_match['DATE'] = hist_match['DATE_STR']
                     potential_cols = ['DATE', 'REASON OF REMOVAL', 'TSN', 'TSO']
                     existing_cols = [c for c in potential_cols if c in hist_match.columns]
