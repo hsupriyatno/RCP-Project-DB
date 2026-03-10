@@ -2,15 +2,15 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# 1. Konfigurasi Dasar
+# 1. Konfigurasi Halaman
 st.set_page_config(page_title="Reliability DHC6-300", layout="wide")
 st.title("✈️ Reliability Dashboard DHC6-300")
 
-# 2. Fungsi Load Data Utama (Sheet Laporan)
+# 2. Fungsi Load Data Utama
 @st.cache_data
 def load_data(file_name, sheet_name):
     try:
-        # Sheet laporan tetap menggunakan header=1 jika judulnya di baris ke-2
+        # Menggunakan header=1 jika data dimulai dari baris ke-2
         df = pd.read_excel(file_name, sheet_name=sheet_name, header=1)
         df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
         df.columns = [str(col).strip() if "Unnamed" not in str(col) else "" for col in df.columns]
@@ -19,19 +19,18 @@ def load_data(file_name, sheet_name):
         st.error(f"Gagal memuat sheet {sheet_name}: {e}")
         return pd.DataFrame()
 
-# 3. Fungsi Load History (Sheet COMPONENT REPLACEMENT)
+# 3. Fungsi Load History (COMPONENT REPLACEMENT)
 @st.cache_data
 def load_history(file_name):
     try:
-        # DISESUAIKAN: header=0 karena judul 'PART NUMBER OFF' ada di baris ke-1
+        # DISESUAIKAN: header=0 karena judul ada di BARIS PERTAMA
         df_hist = pd.read_excel(file_name, sheet_name="COMPONENT REPLACEMENT", header=0)
-        # Bersihkan spasi di nama kolom
         df_hist.columns = [str(col).strip() for col in df_hist.columns]
         return df_hist
     except Exception as e:
         return pd.DataFrame()
 
-# 4. Alur Utama Dashboard
+# 4. Alur Utama
 try:
     file_target = 'COMPONENT_RELIABILITY_DHC6-300.xlsm'
     xls = pd.ExcelFile(file_target)
@@ -58,7 +57,7 @@ try:
         selection_mode="single-row"
     )
 
-    # --- LOGIKA DETAIL (DRILL-DOWN) ---
+    # --- LOGIKA DRILL-DOWN (Klik Baris) ---
     if event.selection.rows:
         index_terpilih = event.selection.rows[0]
         row_data = display_data.iloc[index_terpilih]
@@ -71,27 +70,23 @@ try:
                 st.info(f"**Description:**\n\n{row_data.get('DESCRIPTION', 'N/A')}")
                 st.metric("Total Qty Removal", f"{row_data.get('QTY REM', 0)} EA")
             with col2:
-                # Kolom target di sheet history (Kolom D)
+                st.markdown("**📅 Records in COMPONENT REPLACEMENT:**")
                 target_col = 'PART NUMBER OFF'
                 
                 if target_col in data_history.columns:
-                    # Filter history berdasarkan P/N
+                    # Filter data history berdasarkan P/N
                     detail_pn = data_history[data_history[target_col].astype(str).strip() == pn_terpilih]
-                    
-                    # Kolom yang ingin ditampilkan
                     cols_to_show = ['DATE', 'REASON OF REMOVAL', 'REMARK', 'TSN', 'TSO']
-                    available = [c for c in cols_to_show if c in data_history.columns]
+                    available = [c for c in cols_to_show if c in detail_pn.columns]
                     
                     if not detail_pn.empty:
                         st.table(detail_pn[available])
                     else:
-                        st.warning(f"Tidak ditemukan history untuk P/N {pn_terpilih} di kolom {target_col}.")
+                        st.warning(f"History tidak ditemukan untuk P/N {pn_terpilih} di kolom {target_col}.")
                 else:
-                    # Diagnostik: Menunjukkan judul kolom yang terbaca oleh Python
-                    st.error(f"Kolom '{target_col}' tidak ditemukan di baris pertama.")
-                    st.write("Kolom yang terbaca:", list(data_history.columns))
+                    st.error(f"Kolom '{target_col}' tidak ditemukan. Kolom tersedia: {list(data_history.columns)}")
 
-    # --- GRAFIK ---
+    # --- GRAFIK (PASTIKAN TIDAK ADA SPASI TAMBAHAN DI DEPAN) ---
     st.markdown("---")
     if 'PART NUMBER' in display_data.columns and 'RATE' in display_data.columns:
         chart_data = display_data.head(10).copy()
