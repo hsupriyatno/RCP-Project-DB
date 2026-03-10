@@ -129,9 +129,11 @@ try:
         with m3:
             st.metric("Total Qty Rem", f"{row.get('QTY REM', 0)} EA")
 
-        if not df_history.empty:
+if not df_history.empty:
             col_pn_h = next((c for c in df_history.columns if 'PART' in c.upper()), None)
+            
             if col_pn_h:
+                # Filter data berdasarkan P/N dan Periode
                 hist_match = df_history[
                     (df_history[col_pn_h].astype(str).str.strip() == pn_selected) & 
                     (df_history['DATE'].dt.month == target_m) & 
@@ -139,19 +141,24 @@ try:
                 ].copy()
                 
                 if not hist_match.empty:
+                    # Gunakan format tanggal dd-mm-yyyy
                     if 'DATE_STR' in hist_match.columns:
                         hist_match['DATE'] = hist_match['DATE_STR']
                     
-                    potential_cols = ['DATE', 'REASON OF REMOVAL', 'REMARK', 'TSN', 'TSO']
+                    # Kolom REMARK telah dihapus dari daftar di bawah ini
+                    potential_cols = ['DATE', 'REASON OF REMOVAL', 'TSN', 'TSO']
                     existing_cols = [c for c in potential_cols if c in hist_match.columns]
+                    
                     st.dataframe(hist_match[existing_cols], use_container_width=True, hide_index=True)
                 else:
                     st.info(f"Tidak ada record removal untuk {pn_selected} pada {full_period}.")
-
+            else:
+                st.warning("Kolom identifier Part Number tidak ditemukan di sheet history.")
 except Exception as e:
     st.error(f"Terjadi kesalahan sistem: {e}")
 
 st.sidebar.markdown("---")
 st.sidebar.info("Aviation Reliability Dashboard v1.2")
+
 
 
