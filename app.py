@@ -1,42 +1,39 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(page_title="Database Alamat", layout="wide")
-st.title("📱 Database Alamat")
+# Konfigurasi halaman agar tampilan lebar (bagus untuk tabel besar)
+st.set_page_config(page_title="Reliability Dashboard DHC6", layout="wide")
+
+st.title("✈️ Aircraft Component Reliability Dashboard")
+st.subheader("DHC6-300 Maintenance Monitoring")
 
 @st.cache_data
 def load_data():
-    # Membaca file
-    df = pd.read_csv('data.csv', skiprows=1)
+    # Pastikan nama file di bawah ini sama persis dengan yang Bapak upload ke GitHub
+    file_name = 'COMPONENT_RELIABILITY_DHC6-300.xlsm'
     
-    # 1. Menghapus kolom pertama yang kosong (Unnamed: 0)
-    df = df.iloc[:, 1:]
+    # Membaca Sheet 'REPORT' (asumsi ini adalah ringkasan yang ingin dipantau)
+    # Jika ingin sheet lain, ganti sheet_name-nya
+    df = pd.read_excel(file_name, sheet_name='REPORT', skiprows=1)
     
-    # 2. Menghapus baris yang semuanya kosong
-    df = df.dropna(how='all')
-    
-    # 3. Memastikan NIK dibaca sebagai teks (bukan angka ilmiah)
-    if 'NIK' in df.columns:
-        df['NIK'] = df['NIK'].astype(str).str.split('.').str[0]
-        
+    # Membersihkan data yang kosong
+    df = df.dropna(how='all', axis=0)
     return df
 
 try:
     data = load_data()
-
-    # Kotak Pencarian
-    search = st.text_input("🔍 Cari berdasarkan Nama atau NIK:")
+    
+    # Fitur Pencarian berdasarkan Part Number atau Description
+    search = st.text_input("🔍 Cari Part Number atau Description Component:")
     
     if search:
         # Mencari di semua kolom
         mask = data.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)
-        filtered_df = data[mask]
-        st.success(f"Ditemukan {len(filtered_df)} data")
-        st.dataframe(filtered_df, use_container_width=True, hide_index=True)
+        st.dataframe(data[mask], use_container_width=True)
     else:
-        st.info("Daftar Alamat Lengkap:")
-        # Menggunakan dataframe agar bisa di-scroll jika datanya banyak
-        st.dataframe(data, use_container_width=True, hide_index=True)
+        st.write("Menampilkan semua data komponen:")
+        st.dataframe(data, use_container_width=True)
 
 except Exception as e:
     st.error(f"Terjadi kesalahan: {e}")
+    st.info("Pastikan file 'COMPONENT_RELIABILITY_DHC6-300.xlsm' sudah di-upload ke GitHub.")
