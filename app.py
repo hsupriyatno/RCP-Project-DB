@@ -57,12 +57,19 @@ try:
                 chart_data, 
                 x='PART NUMBER', 
                 y='RATE', 
+                text='RATE',  # MENAMPILKAN ANGKA DI ATAS BATANG
                 title=f"Top 10 Components on {sheet_pilihan}",
                 color='RATE',
                 labels={'RATE': 'Removal Rate', 'PART NUMBER': 'P/N'},
                 color_continuous_scale='Reds',
                 template='plotly_white'
             )
+            
+            # Mengatur agar angka label terlihat rapi (di luar batang) dan dibulatkan
+            fig.update_traces(texttemplate='%{text:.2f}', textposition='outside')
+            
+            # Menampilkan grafik
+            st.plotly_chart(fig, use_container_width=True)
             
             # Menampilkan grafik di Streamlit
             st.plotly_chart(fig, use_container_width=True)
@@ -75,3 +82,4 @@ try:
 except Exception as e:
     st.error(f"Terjadi kesalahan: {e}")
     st.info("Pastikan file Excel dan library sudah sesuai.")
+
