@@ -1,3 +1,8 @@
+Beres, Pak Hery. Kolom REMARK sudah saya hapus sepenuhnya dari tabel detail. Selain itu, saya sudah merapikan struktur try-except agar tidak ada lagi SyntaxError seperti yang muncul pada tangkapan layar Bapak sebelumnya.
+
+Berikut adalah kode lengkap yang sudah diperbarui dengan rasio kolom 5:1:1 dan tanpa kolom REMARK:
+
+Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -17,7 +22,7 @@ st.markdown("""
         border-radius: 10px; 
         box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
     }
-    /* Memaksa alignment kiri pada header tabel */
+    /* Header tabel rata kiri agar rapi */
     [data-testid="stDataFrame"] div[data-testid="stTable"] th { text-align: left !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -87,7 +92,7 @@ try:
     st.title(f"📊 Reliability Analysis: {sheet_pilihan}")
     st.caption(f"Reporting Period: {bln_ref} {thn_ref} | Analysis Data: {full_period}")
 
-    # 5. CHART (Kuning Ramping)
+    # 5. CHART
     if 'PART NUMBER' in df_main.columns and 'RATE' in df_main.columns:
         top_10 = df_main.sort_values(by='RATE', ascending=False).head(10).copy()
         top_10['LABEL'] = top_10['PART NUMBER'].astype(str) + "<br>" + top_10['DESCRIPTION'].astype(str)
@@ -111,7 +116,7 @@ try:
 
     event = st.dataframe(filtered, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
 
-    # 7. PART REMOVAL DETAIL (Rasio 5:1:1)
+    # 7. PART REMOVAL DETAIL
     if event.selection.rows:
         selected_idx = event.selection.rows[0]
         row = filtered.iloc[selected_idx]
@@ -120,7 +125,7 @@ try:
         st.write("---")
         st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn_selected}")
         
-        # Pengaturan rasio kolom sesuai permintaan Bapak: 5:1:1
+        # Rasio kolom 5:1:1 agar deskripsi panjang tidak terpotong
         m1, m2, m3 = st.columns([5, 1, 1])
         with m1:
             st.metric("Description", row.get('DESCRIPTION', 'N/A'))
@@ -129,11 +134,9 @@ try:
         with m3:
             st.metric("Total Qty Rem", f"{row.get('QTY REM', 0)} EA")
 
-if not df_history.empty:
+        if not df_history.empty:
             col_pn_h = next((c for c in df_history.columns if 'PART' in c.upper()), None)
-            
             if col_pn_h:
-                # Filter data berdasarkan P/N dan Periode
                 hist_match = df_history[
                     (df_history[col_pn_h].astype(str).str.strip() == pn_selected) & 
                     (df_history['DATE'].dt.month == target_m) & 
@@ -141,24 +144,18 @@ if not df_history.empty:
                 ].copy()
                 
                 if not hist_match.empty:
-                    # Gunakan format tanggal dd-mm-yyyy
                     if 'DATE_STR' in hist_match.columns:
                         hist_match['DATE'] = hist_match['DATE_STR']
                     
-                    # Kolom REMARK telah dihapus dari daftar di bawah ini
+                    # Kolom REMARK telah dihapus dari daftar tampilan
                     potential_cols = ['DATE', 'REASON OF REMOVAL', 'TSN', 'TSO']
                     existing_cols = [c for c in potential_cols if c in hist_match.columns]
-                    
                     st.dataframe(hist_match[existing_cols], use_container_width=True, hide_index=True)
                 else:
                     st.info(f"Tidak ada record removal untuk {pn_selected} pada {full_period}.")
-            else:
-                st.warning("Kolom identifier Part Number tidak ditemukan di sheet history.")
+
 except Exception as e:
     st.error(f"Terjadi kesalahan sistem: {e}")
 
 st.sidebar.markdown("---")
 st.sidebar.info("Aviation Reliability Dashboard v1.2")
-
-
-
