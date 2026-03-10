@@ -81,49 +81,36 @@ try:
     st.title(f"📊 Reliability Analysis: {sheet_pilihan}")
     st.caption(f"Excel Period: {bln_ref} {thn_ref} | Displaying: {full_period}")
 
-# 4. CHART (Perbaikan Visual: Ramping, 2 Digit, & Label Lengkap)
+# 4. CHART (Final: Ramping, Kuning Solid, 2 Desimal, & Label Ganda)
     if 'PART NUMBER' in df_main.columns and 'RATE' in df_main.columns:
         top_10 = df_main.sort_values(by='RATE', ascending=False).head(10).copy()
         
-        # Menggabungkan P/N dan Description untuk sumbu X
+        # Gabungkan P/N dan Deskripsi (menggunakan <br> untuk baris baru di chart)
         top_10['LABEL'] = top_10['PART NUMBER'].astype(str) + "<br>" + top_10['DESCRIPTION'].astype(str)
         
         st.subheader(f"📈 Top 10 Removal Rate Comparison ({full_period})")
         
-        # Membuat chart dengan label baru dan format 2 desimal
-        fig = px.bar(top_10, x='LABEL', y='RATE', 
-                     text_auto='.2f') # .2f untuk 2 digit desimal
+        fig = px.bar(top_10, x='LABEL', y='RATE', text_auto='.2f')
         
-        # Penyesuaian ketebalan batang dan warna
+        # Pengaturan ketebalan batang dan warna solid Airfast
         fig.update_traces(
             marker_color='#F2B200', 
-            width=0.5 # Mengatur lebar batang agar tidak terlalu tebal
+            width=0.4 # Batang lebih ramping
         ) 
         
         fig.update_layout(
             xaxis_title="PART NUMBER & DESCRIPTION",
             yaxis_title="RATE",
-            xaxis_tickangle=-45, 
-            coloraxis_showscale=False, 
+            xaxis_tickangle=-45,
+            coloraxis_showscale=False,
             showlegend=False,
-            bargap=0.4 # Menambah jarak antar batang agar terlihat ramping
+            bargap=0.5 # Jarak antar batang lebih lebar agar terlihat elegan
         )
-        
         st.plotly_chart(fig, use_container_width=True)
-        
-        with st.expander("📊 View Top 10 Summary Table"):
-            st.dataframe(top_10[['PART NUMBER', 'DESCRIPTION', 'RATE']], use_container_width=True, hide_index=True)
 
-    # 5. EXPLORER
-    st.subheader("🔍 Component Explorer")
-    search = st.text_input("Search Part Number or Description:")
-    filtered = df_main.copy()
-    if search:
-        filtered = df_main[df_main.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)]
+    st.divider()
 
-    event = st.dataframe(filtered, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
-
-    # 6. DETAIL (Fix Dynamic History Loading)
+    # 5. DETAIL (Fix: Solusi untuk 'not in index' error)
     if event.selection.rows:
         row = filtered.iloc[event.selection.rows[0]]
         pn = str(row['PART NUMBER']).strip()
@@ -131,42 +118,26 @@ try:
         st.write("---")
         st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn}")
         
+        # Metric Cards (Huruf Kecil via CSS)
         c1, c2, c3 = st.columns(3)
         c1.metric("Description", row.get('DESCRIPTION', 'N/A'))
-        c2.metric("Current Rate", f"{row.get('RATE', 0):.4f}")
+        c2.metric("Current Rate", f"{row.get('RATE', 0):.2f}")
         c3.metric("Total Qty Rem", f"{row.get('QTY REM', 0)} EA")
 
         if not df_history.empty:
-            # Perbaikan filter dinamis karena nama kolom history sering bergeser saat data loading
-            # Kita cari kolom P/N yang benar di history
-            col_h = None
-            if 'PART NUMBER OFF' in df_history.columns:
-                col_h = 'PART NUMBER OFF'
-            elif 'PART NUMBER' in df_history.columns:
-                col_h = 'PART NUMBER'
-            else:
-                # Fallback: Cari nama kolom yang mengandung kata 'PART'
-                for col_name in df_history.columns:
-                    if 'PART' in col_name.upper():
-                        col_h = col_name
-                        break
+            # Cari kolom P/N di history secara fleksibel
+            col_h = next((c for c in df_history.columns if 'PART' in c.upper()), None)
             
             if col_h:
                 match = df_history[(df_history[col_h].astype(str).str.strip() == pn) & 
                                    (df_history['DATE'].dt.month == target_m) & 
                                    (df_history['DATE'].dt.year == target_y)]
                 
-                show_cols = ['DATE', 'REASON OF REMOVAL', 'REMARK', 'TSN', 'TSO']
-                available = [c for c in show_cols if c in df_history.columns]
+                # FIX: Hanya tampilkan kolom yang benar-benar ada di Excel untuk menghindari error 'not in index'
+                potential_cols = ['DATE', 'REASON OF REMOVAL', 'REMARK', 'TSN', 'TSO']
+                existing_cols = [c for c in potential_cols if c in df_history.columns]
                 
                 if not match.empty:
-                    st.table(match[available])
+                    st.table(match[existing_cols])
                 else:
-                    st.warning(f"No removal records for {pn} in {full_period}.")
-            else:
-                st.error("Gagal menemukan kolom identifier P/N di sheet COMPONENT REPLACEMENT.")
-
-except Exception as e:
-    st.error(f"Critical System Error: {e}")
-
-
+                    st.info(f"No removal records for {pn} in {full_period}.")
