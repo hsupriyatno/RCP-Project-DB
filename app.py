@@ -1,14 +1,3 @@
-Tenang Pak Hery, saya mengerti. Memang lebih mudah kalau langsung copy-paste kode utuh yang sudah diperbaiki semua bagian error-nya (termasuk menghapus kolom index di kiri).
-
-Berikut adalah kode komplit (Full Code) yang sudah saya perbaiki berdasarkan screenshot error yang Bapak kirimkan tadi:
-
-Menghapus Kolom Index: Ditambahkan hide_index=True di semua tabel.
-
-Fix Error 'DATE': Menambahkan pengecekan kolom sebelum memproses data history agar tidak crash.
-
-Fix Error 'range' & 'NaN': Membersihkan data dari nilai kosong (NaN) agar grafik dan perhitungan tidak error.
-
-Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -184,3 +173,4 @@ except Exception as e:
 
 st.sidebar.markdown("---")
 st.sidebar.info(f"Logged in as: {st.session_state.get('user', 'HERY SUPRIYATNO')}")
+
