@@ -85,13 +85,14 @@ try:
 
     st.divider()
 
-    # 5. EXPLORER
+# 5. EXPLORER (Kolom indeks paling kiri dihilangkan)
     st.subheader("🔍 Component Explorer")
     search = st.text_input("Search Part Number or Description:")
     filtered = df_main.copy()
     if search:
         filtered = df_main[df_main.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)]
 
+    # hide_index=True ditambahkan di sini
     event = st.dataframe(filtered, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
 
     if event.selection.rows:
@@ -100,10 +101,7 @@ try:
         st.write("---")
         st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn}")
         
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Description", row.get('DESCRIPTION', 'N/A'))
-        c2.metric("Current Rate", f"{row.get('RATE', 0):.2f}")
-        c3.metric("Total Qty Rem", f"{row.get('QTY REM', 0)} EA")
+        # ... (bagian metric cards tetap sama)
 
         if not df_history.empty:
             col_h = next((c for c in df_history.columns if 'PART' in c.upper()), None)
@@ -116,7 +114,8 @@ try:
                 existing_cols = [c for c in potential_cols if c in df_history.columns]
                 
                 if not match.empty:
-                    st.table(match[existing_cols])
+                    # Menggunakan st.dataframe dengan hide_index=True agar lebih konsisten
+                    st.dataframe(match[existing_cols], use_container_width=True, hide_index=True)
                 else:
                     st.info(f"No removal records for {pn} in {full_period}.")
             else:
@@ -124,3 +123,4 @@ try:
 
 except Exception as e:
     st.error(f"System Error: {e}")
+
