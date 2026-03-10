@@ -1,40 +1,34 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 
-# ... (kode load data sebelumnya tetap sama)
+st.set_page_config(page_title="Reliability DHC6-300", layout="wide")
+st.title("✈️ Reliability Dashboard DHC6-300")
 
-    # TAMPILKAN TABEL
+@st.cache_data
+def load_data(file_name, sheet_name):
+    # Mengambil header dari baris ke-2 (index 1) agar judul kolom benar
+    df = pd.read_excel(file_name, sheet_name=sheet_name, header=1)
+    # Hapus baris & kolom yang 100% kosong
+    df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
+    # Bersihkan nama kolom Unnamed
+    df.columns = ["" if "Unnamed" in str(col) else col for col in df.columns]
+    return df
+
+try:
+    file_target = 'COMPONENT_RELIABILITY_DHC6-300.xlsm'
+    xls = pd.ExcelFile(file_target)
+    sheet_pilihan = st.sidebar.selectbox("Pilih Halaman (Sheet):", xls.sheet_names)
+    
+    st.markdown(f"### 📊 Laporan: {sheet_pilihan}")
+    
+    data = load_data(file_target, sheet_pilihan)
+    search = st.text_input("🔍 Cari Part Number / Description:")
+    
     if search:
         mask = data.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)
         st.dataframe(data[mask], use_container_width=True, hide_index=True)
-        display_data = data[mask] # Data yang difilter untuk grafik
     else:
         st.dataframe(data, use_container_width=True, hide_index=True)
-        display_data = data # Data penuh untuk grafik
 
-    # --- BAGIAN GRAFIK ---
-    st.markdown("---") # Garis pembatas
-    st.subheader("📈 Visualisasi Tren Removal")
-
-    try:
-        # Contoh: Membuat grafik Bar untuk 10 data teratas
-        # Ganti 'PART NUMBER' dan 'RATE' sesuai nama kolom di Excel Bapak
-        fig = px.bar(
-            display_data.head(10), 
-            x='PART NUMBER', 
-            y='RATE', 
-            title="Top 10 Components by Removal Rate",
-            color='RATE',
-            color_continuous_scale='Reds'
-        )
-        st.plotly_chart(fig, use_container_width=True)
-    except Exception as e:
-        st.info("Pilih sheet yang memiliki data numerik untuk menampilkan grafik.")
-
-
-
-
-
-
-
+except Exception as e:
+    st.error(f"Terjadi kesalahan: {e}")
