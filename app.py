@@ -77,7 +77,8 @@ try:
             # Merapikan tampilan sumbu X agar teks miring dan tidak bertumpuk
             fig.update_layout(xaxis_tickangle=-45)
             
-            st.plotly_chart(fig, use_container_width=True, key=f"chart_{sheet_pilihan}")        else:
+            st.plotly_chart(fig, use_container_width=True, key=f"chart_{sheet_pilihan}")        
+        else:
             st.info("💡 Grafik otomatis akan muncul jika sheet ini memiliki kolom 'PART NUMBER' dan 'RATE'.")
 
     except Exception as e:
@@ -85,6 +86,7 @@ try:
 
 except Exception as e:
     st.error(f"Terjadi kesalahan: {e}")
+
 
 
 
