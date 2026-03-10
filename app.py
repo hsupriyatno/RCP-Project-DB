@@ -1,8 +1,3 @@
-Siap, Pak Hery. Berikut adalah kode lengkap yang sudah saya koreksi total agar bebas dari segala SyntaxError dan pesan kesalahan sistem yang sebelumnya muncul di layar Bapak.
-
-Saya telah memastikan parameter yang tidak didukung (seperti range dan alignment) sudah dihapus dan diganti dengan metode yang lebih aman.
-
-Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -153,3 +148,4 @@ except Exception as e:
 
 st.sidebar.markdown("---")
 st.sidebar.info(f"User: HERY SUPRIYATNO")
+
