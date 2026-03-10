@@ -132,20 +132,16 @@ try:
         selection_mode="single-row"
     )
 
-    # 7. PART REMOVAL DETAIL (Format Tanggal dd-mm-yyyy & Hide Index)
-    if event.selection.rows:
-        selected_idx = event.selection.rows[0]
-        row = filtered.iloc[selected_idx]
-        pn_selected = str(row['PART NUMBER']).strip()
-        
+    # 7. PART REMOVAL DETAIL (Proporsi Baru: Deskripsi Lebih Lebar)
         st.write("---")
         st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn_selected}")
         
-        # Metrics dengan CSS huruf kecil
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Description", row.get('DESCRIPTION', 'N/A'))
-        m2.metric("Current Rate", f"{row.get('RATE', 0):.2f}")
-        m3.metric("Total Qty Rem", f"{row.get('QTY REM', 0)} EA")
+        # Mengubah rasio kolom menjadi [2, 1, 1] agar Description punya ruang lebih luas
+        c1, c2, c3 = st.columns([2, 1, 1]) 
+        
+        c1.metric("Description", row.get('DESCRIPTION', 'N/A'))
+        c2.metric("Current Rate", f"{row.get('RATE', 0):.2f}")
+        c3.metric("Total Qty Rem", f"{row.get('QTY REM', 0)} EA")
 
         if not df_history.empty:
             # Cari kolom P/N di history secara fleksibel
@@ -180,3 +176,4 @@ except Exception as e:
 # Footer
 st.sidebar.markdown("---")
 st.sidebar.info("Aviation Reliability Dashboard v1.2")
+
