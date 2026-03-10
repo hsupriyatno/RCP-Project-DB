@@ -1,3 +1,8 @@
+Mengerti, Pak Hery. Jadi kesimpulannya adalah semua elemen pada bagian detail—mulai dari judul "PART REMOVAL DETAIL", teks "Description", hingga seluruh isi dan Header Tabel (DATE, REASON OF REMOVAL, TSN, TSO)—semuanya dikembalikan ke Rata Kiri (Left Aligned) agar terlihat seragam dan konsisten.
+
+Berikut adalah kode lengkap dan final untuk memastikan tidak ada lagi bagian yang tertinggal atau salah format:
+
+Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -82,7 +87,7 @@ try:
 
     st.divider()
 
-    # 5. EXPLORER
+    # 5. EXPLORER (Tanpa Indeks)
     st.subheader("🔍 Component Explorer")
     search = st.text_input("Search Part Number or Description:")
     filtered = df_main.copy()
@@ -92,17 +97,17 @@ try:
 
     event = st.dataframe(filtered, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
 
-    # 6. PART REMOVAL DETAIL (Polesan Akhir)
+    # 6. PART REMOVAL DETAIL (SEMUA RATA KIRI)
     if event.selection.rows:
         selected_idx = event.selection.rows[0]
         row = filtered.iloc[selected_idx]
         pn_selected = str(row['PART NUMBER']).strip()
         
         st.write("---")
-        # Judul Rata Kiri
+        # Header Rata Kiri
         st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn_selected}")
         
-        # Proporsi 1:5:1:1
+        # Proporsi 1:5:1:1 dengan alignment default (Kiri)
         _, c1, c2, c3 = st.columns([1, 5, 1, 1]) 
         c1.metric("Description", row.get('DESCRIPTION', 'N/A'))
         c2.metric("Current Rate", f"{row.get('RATE', 0):.2f}")
@@ -121,16 +126,14 @@ try:
                     if 'DATE_STR' in hist_match.columns:
                         hist_match['DATE'] = hist_match['DATE_STR']
                     
-                    # Kolom Tanpa REMARK
+                    # Kolom teknis utama tanpa REMARK
                     potential_cols = ['DATE', 'REASON OF REMOVAL', 'TSN', 'TSO']
                     existing_cols = [c for c in potential_cols if c in hist_match.columns]
                     
-                    # CSS untuk Header Center
-                    st.markdown("<style>th { text-align: center !important; }</style>", unsafe_allow_html=True)
+                    # Menampilkan tabel: Header dan Isi otomatis Rata Kiri
                     st.dataframe(hist_match[existing_cols], use_container_width=True, hide_index=True)
                 else:
                     st.info(f"Tidak ada record removal untuk {pn_selected} pada {full_period}.")
 
 except Exception as e:
     st.error(f"Sistem Error: {e}")
-
