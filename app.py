@@ -119,7 +119,7 @@ try:
         pn_selected = str(row['PART NUMBER']).strip()
         
         st.write("---")
-        st.subheader(f"🛠️ Maintenance Detail: {pn_selected}")
+        st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn_selected}")
         
         # Dashboard Mini untuk Part Terpilih
         m1, m2, m3 = st.columns(3)
@@ -148,4 +148,5 @@ try:
 
 except Exception as e:
     st.error(f"Critical System Error: {e}")
+
 
