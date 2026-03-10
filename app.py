@@ -1,116 +1,133 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from datetime import datetime, timedelta
 
-# 1. KONFIGURASI HALAMAN & STYLE
-st.set_page_config(page_title="Reliability Dashboard - Airfast", layout="wide")
+# 1. KONFIGURASI HALAMAN & CSS
+st.set_page_config(page_title="Reliability Dashboard | Airfast Indonesia", layout="wide")
 
-# CSS untuk memaksa teks tabel rata tengah (Center)
 st.markdown("""
     <style>
-    [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th {
-        text-align: center !important;
+    .main { background-color: #f5f7f9; }
+    [data-testid="stMetricLabel"] { font-size: 14px !important; }
+    [data-testid="stMetricValue"] { font-size: 22px !important; }
+    .stMetric { 
+        background-color: #ffffff; 
+        padding: 10px; 
+        border-radius: 10px; 
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
     }
+    /* Header tabel rata kiri agar rapi */
+    [data-testid="stDataFrame"] div[data-testid="stTable"] th { text-align: left !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. FUNGSI LOAD DATA (DENGAN PENANGANAN DATA KOSONG/NaN)
+# 2. FUNGSI PEMBERSIH DATA DINAMIS
+def clean_dynamic_columns(df):
+    for i in range(len(df)):
+        row_values = [str(val).upper() for val in df.iloc[i].values]
+        if 'PART NUMBER' in row_values:
+            new_cols = df.iloc[i].values
+            df = df.iloc[i+1:].copy()
+            df.columns = [str(c).strip().upper() for c in new_cols]
+            break
+    df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
+    if 'RATE' in df.columns:
+        df['RATE'] = pd.to_numeric(df['RATE'], errors='coerce').fillna(0)
+    return df
+
+# 3. FUNGSI LOAD DATA
 @st.cache_data
-def load_all_data(file_path, sheet_name):
-    # Menggunakan skiprows untuk menghindari error 'range'
-    df_m = pd.read_excel(file_path, sheet_name=sheet_name, skiprows=4)
-    df_m.columns = [str(c).strip().upper() for c in df_m.columns]
-    
-    # FIX: Tangani data kosong agar tidak error "float NaN to integer"
-    df_m = df_m.fillna(0)
-    
-    # Ambil referensi periode
-    df_ref = pd.read_excel(file_path, sheet_name=sheet_name, nrows=1, header=None)
-    bln_ref = str(df_ref.iloc[0, 0]).strip()
-    thn_ref = str(df_ref.iloc[0, 1]).strip()
-    
-    # Load History (Sheet ke-3)
-    df_h = pd.read_excel(file_path, sheet_name=2)
-    df_h.columns = [str(c).strip().upper() for c in df_h.columns]
-    df_h = df_h.fillna(0) # Tangani NaN di history juga
-    
-    if 'DATE' in df_h.columns:
-        df_h['DATE'] = pd.to_datetime(df_h['DATE'], errors='coerce')
-        df_h['DATE_STR'] = df_h['DATE'].dt.strftime('%d-%m-%Y')
-        
-    return df_m, df_h, bln_ref, thn_ref
-
-def get_period_info(bln, thn):
-    months = {
-        "JANUARY": 1, "FEBRUARY": 2, "MARCH": 3, "APRIL": 4, "MAY": 5, "JUNE": 6,
-        "JULY": 7, "AUGUST": 8, "SEPTEMBER": 9, "OCTOBER": 10, "NOVEMBER": 11, "DECEMBER": 12
-    }
+def load_all_data(file_name, sheet_name):
     try:
-        m_idx = months.get(bln.upper(), 1)
-        y_val = int(float(thn)) # Handle jika thn terbaca sebagai float
-        return m_idx, y_val, f"{bln.capitalize()} {y_val}"
-    except:
-        return 1, 2026, "Unknown Period"
+        df_crit = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None, nrows=3, usecols="A")
+        bln_raw = str(df_crit.iloc[1, 0]).strip().upper()
+        thn_raw = str(df_crit.iloc[2, 0]).strip().replace('.0', '')
+        
+        df_main = pd.read_excel(file_name, sheet_name=sheet_name, header=None)
+        df_main = clean_dynamic_columns(df_main)
+        
+        df_hist = pd.read_excel(file_name, sheet_name="COMPONENT REPLACEMENT")
+        df_hist.columns = [str(c).strip().upper() for c in df_hist.columns]
+        
+        if 'DATE' in df_hist.columns:
+            df_hist['DATE'] = pd.to_datetime(df_hist['DATE'], errors='coerce')
+            df_hist['DATE_STR'] = df_hist['DATE'].dt.strftime('%d-%m-%Y')
+            
+        return df_main, df_hist, bln_raw, thn_raw
+    except Exception as e:
+        st.error(f"Gagal memuat data: {e}")
+        return pd.DataFrame(), pd.DataFrame(), "N/A", "N/A"
 
-# 3. LOGIKA UTAMA
+# 4. LOGIKA PERIODE BULAN
+def get_period_info(bulan, tahun):
+    m_map = {'JANUARY':1,'FEBRUARY':2,'MARCH':3,'APRIL':4,'MAY':5,'JUNE':6,
+             'JULY':7,'AUGUST':8,'SEPTEMBER':9,'OCTOBER':10,'NOVEMBER':11,'DECEMBER':12}
+    m_num = m_map.get(bulan, 12)
+    try:
+        curr = datetime(int(tahun), m_num, 1)
+        prev = curr - timedelta(days=1)
+        p_name = [k for k, v in m_map.items() if v == prev.month][0]
+        return prev.month, prev.year, p_name
+    except:
+        return 11, 2025, "NOVEMBER"
+
+# --- MAIN APP START ---
 FILE_PATH = 'COMPONENT_RELIABILITY_DHC6-300.xlsm'
 
 try:
     xls = pd.ExcelFile(FILE_PATH)
     st.sidebar.title("Navigation")
-    
-    # Key unik untuk mencegah Duplicate ID
-    sheet_pilihan = st.sidebar.selectbox("Pilih Sheet Report:", xls.sheet_names, key="nav_select")
+    sheet_pilihan = st.sidebar.selectbox("Pilih Sheet Report:", xls.sheet_names)
     
     df_main, df_history, bln_ref, thn_ref = load_all_data(FILE_PATH, sheet_pilihan)
-    target_m, target_y, full_period = get_period_info(bln_ref, thn_ref)
+    target_m, target_y, target_m_name = get_period_info(bln_ref, thn_ref)
+    full_period = f"{target_m_name} {target_y}"
 
     st.title(f"📊 Reliability Analysis: {sheet_pilihan}")
-    st.caption(f"Periode: {full_period}")
+    st.caption(f"Reporting Period: {bln_ref} {thn_ref} | Analysis Data: {full_period}")
 
-    # 4. CHART TOP 10
+    # 5. CHART
     if 'PART NUMBER' in df_main.columns and 'RATE' in df_main.columns:
         top_10 = df_main.sort_values(by='RATE', ascending=False).head(10).copy()
         top_10['LABEL'] = top_10['PART NUMBER'].astype(str) + "<br>" + top_10['DESCRIPTION'].astype(str)
         
+        st.subheader(f"📈 Top 10 Removal Rate Comparison ({full_period})")
         fig = px.bar(top_10, x='LABEL', y='RATE', text_auto='.2f')
         fig.update_traces(marker_color='#F2B200', width=0.4) 
+        fig.update_layout(xaxis_title="PN & DESC", yaxis_title="RATE", xaxis_tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
 
     st.divider()
 
-    # 5. EXPLORER
+    # 6. COMPONENT EXPLORER
     st.subheader("🔍 Component Explorer")
-    search = st.text_input("Search PN/Description:", key="search_comp")
+    search = st.text_input("Cari Part Number atau Deskripsi:")
     
     filtered = df_main.copy()
     if search:
         mask = df_main.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)
         filtered = df_main[mask]
 
-    event = st.dataframe(
-        filtered, 
-        use_container_width=True, 
-        hide_index=True, 
-        on_select="rerun", 
-        selection_mode="single-row", 
-        key="data_explorer"
-    )
+    event = st.dataframe(filtered, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
 
-    # 6. DETAIL (RASIO 1:5:1:1)
+    # 7. PART REMOVAL DETAIL
     if event.selection.rows:
         selected_idx = event.selection.rows[0]
         row = filtered.iloc[selected_idx]
         pn_selected = str(row['PART NUMBER']).strip()
         
         st.write("---")
-        st.subheader(f"🛠️ DETAIL REMOVAL: {pn_selected}")
+        st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn_selected}")
         
-        # Metrik Ringkas
+        # Rasio kolom 5:1:1 agar deskripsi panjang tidak terpotong
         m1, m2, m3 = st.columns([5, 1, 1])
-        m1.metric("Description", row.get('DESCRIPTION', 'N/A'))
-        m2.metric("Rate", f"{row.get('RATE', 0):.2f}")
-        m3.metric("Total Qty", f"{int(row.get('QTY REM', 0))} EA")
+        with m1:
+            st.metric("Description", row.get('DESCRIPTION', 'N/A'))
+        with m2:
+            st.metric("Current Rate", f"{row.get('RATE', 0):.2f}")
+        with m3:
+            st.metric("Total Qty Rem", f"{row.get('QTY REM', 0)} EA")
 
         if not df_history.empty:
             col_pn_h = next((c for c in df_history.columns if 'PART' in c.upper()), None)
@@ -122,25 +139,18 @@ try:
                 ].copy()
                 
                 if not hist_match.empty:
-                    # Tampilkan Tanpa REMARK
-                    disp = ['DATE_STR', 'REASON OF REMOVAL', 'TSN', 'TSO']
-                    existing = [c for c in disp if c in hist_match.columns]
+                    if 'DATE_STR' in hist_match.columns:
+                        hist_match['DATE'] = hist_match['DATE_STR']
                     
-                    st.dataframe(
-                        hist_match[existing], 
-                        use_container_width=True, 
-                        hide_index=True,
-                        column_config={
-                            "DATE_STR": st.column_config.Column("DATE", width="small"),
-                            "REASON OF REMOVAL": st.column_config.Column(width="large"),
-                            "TSN": st.column_config.Column(width="small"),
-                            "TSO": st.column_config.Column(width="small")
-                        }
-                    )
+                    # Kolom REMARK telah dihapus dari daftar tampilan
+                    potential_cols = ['DATE', 'REASON OF REMOVAL', 'TSN', 'TSO']
+                    existing_cols = [c for c in potential_cols if c in hist_match.columns]
+                    st.dataframe(hist_match[existing_cols], use_container_width=True, hide_index=True)
+                else:
+                    st.info(f"Tidak ada record removal untuk {pn_selected} pada {full_period}.")
 
-# PENUTUP BLOK AGAR TIDAK SYNTAX ERROR
 except Exception as e:
-    st.error(f"Sistem Error: {e}")
+    st.error(f"Terjadi kesalahan sistem: {e}")
 
 st.sidebar.markdown("---")
-st.sidebar.info("User: HERY SUPRIYATNO")
+st.sidebar.info("Aviation Reliability Dashboard v1.2")
