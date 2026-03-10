@@ -1,10 +1,3 @@
-Mohon maaf sekali atas kendalanya, Pak Hery. Saya melihat dari gambar yang Bapak kirim bahwa tabelnya bergeser sehingga nama kolom aslinya (seperti PART NUMBER dan RATE) terbaca sebagai Unnamed: 2 atau Unnamed: 5 oleh Python. Hal ini menyebabkan error "Value of x is not the name of a column" karena Python tidak bisa menemukan kolom yang tepat untuk membuat chart.
-
-Saya telah memperbaiki logika pembersihan data (clean_df) agar secara otomatis mencari baris yang berisi data asli dan mengganti nama kolom Unnamed menjadi nama yang benar secara dinamis.
-
-Berikut adalah kode yang sudah diperbaiki agar Chart muncul kembali di paling atas:
-
-Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -138,3 +131,4 @@ try:
 
 except Exception as e:
     st.error(f"Critical System Error: {e}")
+
