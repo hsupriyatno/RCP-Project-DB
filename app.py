@@ -1,10 +1,3 @@
-Siap, Pak Hery. Saya mengerti. Masalahnya adalah tabel history (riwayat removal) di bagian bawah tidak muncul meski baris komponen sudah diklik.
-
-Berdasarkan gambar error yang Bapak kirim, ada SyntaxError di baris if not df_history.empty: karena adanya teks penjelasan yang terselip. Hal ini menyebabkan seluruh blok kode untuk menampilkan tabel detail terhenti.
-
-Berikut adalah kode yang sudah saya perbaiki total. Saya telah memastikan indentasi (spasi) sudah benar dan logika pemfilteran periode sesuai agar tabel detail muncul tepat di bawah metrik komponen.
-
-Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -158,3 +151,4 @@ except Exception as e:
 
 st.sidebar.markdown("---")
 st.sidebar.info(f"Logged in as: HERY SUPRIYATNO")
+
