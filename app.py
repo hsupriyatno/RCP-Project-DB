@@ -10,9 +10,9 @@ st.title("✈️ Reliability Dashboard DHC6-300")
 @st.cache_data
 def load_data(file_name, sheet_name):
     try:
-        # Menggunakan header=1 jika data dimulai dari baris ke-2
         df = pd.read_excel(file_name, sheet_name=sheet_name, header=1)
         df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
+        # Bersihkan nama kolom
         df.columns = [str(col).strip() if "Unnamed" not in str(col) else "" for col in df.columns]
         return df
     except Exception as e:
@@ -23,7 +23,7 @@ def load_data(file_name, sheet_name):
 @st.cache_data
 def load_history(file_name):
     try:
-        # DISESUAIKAN: header=0 karena judul ada di BARIS PERTAMA
+        # header=0 karena judul 'PART NUMBER OFF' ada di baris pertama Excel
         df_hist = pd.read_excel(file_name, sheet_name="COMPONENT REPLACEMENT", header=0)
         df_hist.columns = [str(col).strip() for col in df_hist.columns]
         return df_hist
@@ -48,7 +48,9 @@ try:
     else:
         display_data = data_utama
 
-    st.info("💡 Klik baris tabel untuk melihat detail history dari COMPONENT REPLACEMENT.")
+    st.info("💡 Klik baris tabel untuk melihat detail history.")
+    
+    # Gunakan on_select="rerun" untuk menangkap klik user
     event = st.dataframe(
         display_data, 
         use_container_width=True, 
@@ -57,10 +59,12 @@ try:
         selection_mode="single-row"
     )
 
-    # --- LOGIKA DRILL-DOWN (Klik Baris) ---
-    if event.selection.rows:
+    # --- LOGIKA DRILL-DOWN (KLIK BARIS) ---
+    if len(event.selection.rows) > 0:
         index_terpilih = event.selection.rows[0]
         row_data = display_data.iloc[index_terpilih]
+        
+        # Ambil P/N dan bersihkan spasi (Gunakan str() agar aman)
         pn_terpilih = str(row_data['PART NUMBER']).strip()
         
         st.markdown(f"### 🔍 Detailed History for P/N: {pn_terpilih}")
@@ -70,23 +74,25 @@ try:
                 st.info(f"**Description:**\n\n{row_data.get('DESCRIPTION', 'N/A')}")
                 st.metric("Total Qty Removal", f"{row_data.get('QTY REM', 0)} EA")
             with col2:
-                st.markdown("**📅 Records in COMPONENT REPLACEMENT:**")
-                target_col = 'PART NUMBER OFF'
+                st.markdown("**📅 Records in 'COMPONENT REPLACEMENT':**")
                 
+                target_col = 'PART NUMBER OFF'
                 if target_col in data_history.columns:
-                    # Filter data history berdasarkan P/N
-                    detail_pn = data_history[data_history[target_col].astype(str).strip() == pn_terpilih]
+                    # Perbaikan error 'Series' object: konversi kolom ke string dulu baru dicocokkan
+                    mask_hist = data_history[target_col].astype(str).str.strip() == pn_terpilih
+                    detail_pn = data_history[mask_hist]
+                    
                     cols_to_show = ['DATE', 'REASON OF REMOVAL', 'REMARK', 'TSN', 'TSO']
-                    available = [c for c in cols_to_show if c in detail_pn.columns]
+                    available = [c for c in cols_to_show if c in data_history.columns]
                     
                     if not detail_pn.empty:
                         st.table(detail_pn[available])
                     else:
-                        st.warning(f"History tidak ditemukan untuk P/N {pn_terpilih} di kolom {target_col}.")
+                        st.warning(f"Tidak ada catatan untuk P/N {pn_terpilih} di kolom {target_col}.")
                 else:
-                    st.error(f"Kolom '{target_col}' tidak ditemukan. Kolom tersedia: {list(data_history.columns)}")
+                    st.error(f"Kolom '{target_col}' tidak ditemukan.")
 
-    # --- GRAFIK (PASTIKAN TIDAK ADA SPASI TAMBAHAN DI DEPAN) ---
+    # --- BAGIAN GRAFIK ---
     st.markdown("---")
     if 'PART NUMBER' in display_data.columns and 'RATE' in display_data.columns:
         chart_data = display_data.head(10).copy()
@@ -101,4 +107,4 @@ try:
         st.plotly_chart(fig, use_container_width=True, key=f"chart_{sheet_pilihan}")
 
 except Exception as e:
-    st.error(f"Terjadi kesalahan: {e}")
+    st.error(f"Terjadi kesalahan sistem: {e}")
