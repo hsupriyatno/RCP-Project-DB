@@ -81,29 +81,38 @@ try:
     st.title(f"📊 Reliability Analysis: {sheet_pilihan}")
     st.caption(f"Excel Period: {bln_ref} {thn_ref} | Displaying: {full_period}")
 
-    # 4. CHART (Perbaikan Visual Airfast)
+# 4. CHART (Perbaikan Visual: Ramping, 2 Digit, & Label Lengkap)
     if 'PART NUMBER' in df_main.columns and 'RATE' in df_main.columns:
-        top_10 = df_main.sort_values(by='RATE', ascending=False).head(10)
+        top_10 = df_main.sort_values(by='RATE', ascending=False).head(10).copy()
+        
+        # Menggabungkan P/N dan Description untuk sumbu X
+        top_10['LABEL'] = top_10['PART NUMBER'].astype(str) + "<br>" + top_10['DESCRIPTION'].astype(str)
         
         st.subheader(f"📈 Top 10 Removal Rate Comparison ({full_period})")
         
-        # FIX VISUAL DI SINI:
-        # Menghapus gradasi warna (color='RATE') dan ganti menjadi kuning tua solid khas Airfast
-        # Kode warna #F2B200 adalah kuning tua/emas solid.
-        fig = px.bar(top_10, x='PART NUMBER', y='RATE', 
-                     text_auto='.4f')
+        # Membuat chart dengan label baru dan format 2 desimal
+        fig = px.bar(top_10, x='LABEL', y='RATE', 
+                     text_auto='.2f') # .2f untuk 2 digit desimal
         
-        # PERBAIKAN visual layout:
-        # Menghapus legend/colorbar RATE yang diminta Bapak
-        # Mengatur warna batang menjadi solid kuning tua (#F2B200)
-        fig.update_traces(marker_color='#F2B200') # Warna batang Kuning Tua Solid
-        fig.update_layout(xaxis_tickangle=-45, coloraxis_showscale=False, showlegend=False) # Hapus legend/colorbar
+        # Penyesuaian ketebalan batang dan warna
+        fig.update_traces(
+            marker_color='#F2B200', 
+            width=0.5 # Mengatur lebar batang agar tidak terlalu tebal
+        ) 
+        
+        fig.update_layout(
+            xaxis_title="PART NUMBER & DESCRIPTION",
+            yaxis_title="RATE",
+            xaxis_tickangle=-45, 
+            coloraxis_showscale=False, 
+            showlegend=False,
+            bargap=0.4 # Menambah jarak antar batang agar terlihat ramping
+        )
+        
         st.plotly_chart(fig, use_container_width=True)
         
         with st.expander("📊 View Top 10 Summary Table"):
             st.dataframe(top_10[['PART NUMBER', 'DESCRIPTION', 'RATE']], use_container_width=True, hide_index=True)
-
-    st.divider()
 
     # 5. EXPLORER
     st.subheader("🔍 Component Explorer")
@@ -159,4 +168,5 @@ try:
 
 except Exception as e:
     st.error(f"Critical System Error: {e}")
+
 
