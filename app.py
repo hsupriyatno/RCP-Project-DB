@@ -9,21 +9,25 @@ st.title("✈️ Reliability Dashboard DHC6-300")
 # 2. Fungsi Load Data Utama
 @st.cache_data
 def load_data(file_name, sheet_name):
-    df = pd.read_excel(file_name, sheet_name=sheet_name, header=1)
-    df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
-    df.columns = ["" if "Unnamed" in str(col) else col for col in df.columns]
-    return df
+    try:
+        df = pd.read_excel(file_name, sheet_name=sheet_name, header=1)
+        df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
+        # Bersihkan nama kolom dari spasi dan Unnamed
+        df.columns = [str(col).strip() if "Unnamed" not in str(col) else "" for col in df.columns]
+        return df
+    except Exception as e:
+        st.error(f"Gagal memuat sheet {sheet_name}: {e}")
+        return pd.DataFrame()
 
-# 3. Fungsi Load Khusus Sheet History (COMPONENT REPLACEMENT)
+# 3. Fungsi Load History (COMPONENT REPLACEMENT)
 @st.cache_data
 def load_history(file_name):
-    # Membaca database history dari sheet sebelah
     try:
         df_hist = pd.read_excel(file_name, sheet_name="COMPONENT REPLACEMENT", header=1)
-        df_hist = df_hist.dropna(how='all', axis=0)
+        df_hist.columns = [str(col).strip() for col in df_hist.columns]
         return df_hist
     except:
-        return pd.DataFrame() # Balikkan tabel kosong jika sheet tidak ketemu
+        return pd.DataFrame()
 
 # 4. Alur Utama
 try:
@@ -34,7 +38,7 @@ try:
     sheet_pilihan = st.sidebar.selectbox("Pilih Halaman (Sheet):", xls.sheet_names)
     st.markdown(f"### 📊 REPORT: TOP 10 HIGHEST REMOVAL RATE ({sheet_pilihan})")
     
-    # Muat kedua data sekaligus
+    # Muat Data
     data_utama = load_data(file_target, sheet_pilihan)
     data_history = load_history(file_target)
     
@@ -46,8 +50,8 @@ try:
     else:
         display_data = data_utama
 
-    # --- BAGIAN TABEL INTERAKTIF ---
-    st.info("💡 Klik pada baris tabel di bawah untuk melihat history dari sheet Replacement.")
+    # --- TABEL UTAMA ---
+    st.info("💡 Klik pada baris tabel untuk melihat history detail.")
     event = st.dataframe(
         display_data, 
         use_container_width=True, 
@@ -56,40 +60,34 @@ try:
         selection_mode="single-row"
     )
 
-    # --- LOGIKA DRILL-DOWN (Mencari ke sheet COMPONENT REPLACEMENT) ---
-# --- LOGIKA DRILL-DOWN (Sesuaikan nama kolom PART NUMBER OFF) ---
-    if len(event.selection.rows) > 0:
+    # --- LOGIKA DRILL-DOWN (Klik Baris) ---
+    if event.selection.rows:
         index_terpilih = event.selection.rows[0]
         row_data = display_data.iloc[index_terpilih]
         pn_terpilih = str(row_data['PART NUMBER']).strip()
         
         st.markdown(f"### 🔍 Detailed History for P/N: {pn_terpilih}")
         with st.container(border=True):
-            # Kita arahkan pencarian ke kolom 'PART NUMBER OFF'
-            col_target_history = 'PART NUMBER OFF'
-            
-            if col_target_history in data_history.columns:
-                # Filter data history berdasarkan P/N yang kita klik di tabel utama
-                detail_pn = data_history[data_history[col_target_history].astype(str).strip() == pn_terpilih]
-                
-                col1, col2 = st.columns([1, 2])
-                with col1:
-                    st.info(f"**Description:**\n\n{row_data['DESCRIPTION']}")
-                    st.metric("Total Qty Removal", f"{row_data['QTY REM']} EA")
-                with col2:
-                    st.markdown(f"**📅 Records found in 'COMPONENT REPLACEMENT' (as {col_target_history}):**")
-                    # Kolom yang ingin ditampilkan di tabel detail
+            col1, col2 = st.columns([1, 2])
+            with col1:
+                st.info(f"**Description:**\n\n{row_data.get('DESCRIPTION', 'N/A')}")
+                st.metric("Total Qty Removal", f"{row_data.get('QTY REM', 0)} EA")
+            with col2:
+                st.markdown("**📅 Records in 'COMPONENT REPLACEMENT':**")
+                # Gunakan kolom PART NUMBER OFF untuk filter
+                if 'PART NUMBER OFF' in data_history.columns:
+                    detail_pn = data_history[data_history['PART NUMBER OFF'].astype(str).strip() == pn_terpilih]
                     cols_to_show = ['DATE', 'REASON OF REMOVAL', 'REMARK', 'TSN', 'TSO']
                     available = [c for c in cols_to_show if c in detail_pn.columns]
                     
                     if not detail_pn.empty:
                         st.table(detail_pn[available])
                     else:
-                        st.warning(f"P/N {pn_terpilih} tidak ditemukan history-nya di kolom {col_target_history}.")
-                    else:
-                        st.error(f"Kolom '{col_target_history}' tidak ditemukan di sheet COMPONENT REPLACEMENT. Silakan cek kembali nama kolomnya di Excel.")
+                        st.warning(f"Tidak ada catatan removal untuk P/N {pn_terpilih}")
+                else:
+                    st.error("Kolom 'PART NUMBER OFF' tidak ditemukan di sheet Replacement.")
 
-    # --- BAGIAN GRAFIK ---
+    # --- GRAFIK ---
     st.markdown("---")
     if 'PART NUMBER' in display_data.columns and 'RATE' in display_data.columns:
         chart_data = display_data.head(10).copy()
@@ -104,10 +102,4 @@ try:
         st.plotly_chart(fig, use_container_width=True, key=f"chart_{sheet_pilihan}")
 
 except Exception as e:
-    st.error(f"Terjadi kesalahan struktur: {e}")
-
-
-
-
-
-
+    st.error(f"Terjadi kesalahan sistem: {e}")
