@@ -20,7 +20,7 @@ def clean_dynamic_columns(df):
         df['RATE'] = pd.to_numeric(df['RATE'], errors='coerce').fillna(0)
     return df
 
-# 3. FUNGSI LOAD DATA (Format Tanggal dd-mm-yyyy)
+# 3. FUNGSI LOAD DATA
 @st.cache_data
 def load_all_data(file_name, sheet_name):
     try:
@@ -90,24 +90,26 @@ try:
         mask = df_main.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)
         filtered = df_main[mask]
 
-    # Menghilangkan kolom indeks paling kiri
     event = st.dataframe(filtered, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
 
-    # 6. PART REMOVAL DETAIL (SEMUA RATA KIRI)
+    # 6. PART REMOVAL DETAIL (CUSTOM HTML UNTUK RATA KIRI TOTAL)
     if event.selection.rows:
         selected_idx = event.selection.rows[0]
         row = filtered.iloc[selected_idx]
         pn_selected = str(row['PART NUMBER']).strip()
         
         st.write("---")
-        # Judul Rata Kiri
         st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn_selected}")
         
-        # Proporsi Kolom 1:5:1:1 dengan alignment default (Kiri)
-        _, c1, c2, c3 = st.columns([1, 5, 1, 1]) 
-        c1.metric("Description", row.get('DESCRIPTION', 'N/A'))
-        c2.metric("Current Rate", f"{row.get('RATE', 0):.2f}")
-        c3.metric("Total Qty Rem", f"{row.get('QTY REM', 0)} EA")
+        # Menggunakan HTML/CSS untuk memaksa teks tetap di margin kiri (menggantikan st.metric)
+        col_desc, col_rate, col_qty = st.columns([5, 1, 1])
+        
+        with col_desc:
+            st.markdown(f"<p style='margin-bottom:-10px; font-size:14px; color:gray;'>Description</p><h2 style='text-align:left;'>{row.get('DESCRIPTION', 'N/A')}</h2>", unsafe_allow_html=True)
+        with col_rate:
+            st.markdown(f"<p style='margin-bottom:-10px; font-size:14px; color:gray;'>Current Rate</p><h2 style='text-align:left;'>{row.get('RATE', 0):.2f}</h2>", unsafe_allow_html=True)
+        with col_qty:
+            st.markdown(f"<p style='margin-bottom:-10px; font-size:14px; color:gray;'>Total Qty Rem</p><h2 style='text-align:left;'>{row.get('QTY REM', 0)} EA</h2>", unsafe_allow_html=True)
 
         if not df_history.empty:
             col_pn_h = next((c for c in df_history.columns if 'PART' in c.upper()), None)
@@ -122,11 +124,9 @@ try:
                     if 'DATE_STR' in hist_match.columns:
                         hist_match['DATE'] = hist_match['DATE_STR']
                     
-                    # Kolom teknis tanpa REMARK
                     potential_cols = ['DATE', 'REASON OF REMOVAL', 'TSN', 'TSO']
                     existing_cols = [c for c in potential_cols if c in hist_match.columns]
                     
-                    # Menampilkan tabel dengan alignment standar (Kiri) dan tanpa indeks
                     st.dataframe(hist_match[existing_cols], use_container_width=True, hide_index=True)
                 else:
                     st.info(f"Tidak ada record removal untuk {pn_selected} pada {full_period}.")
