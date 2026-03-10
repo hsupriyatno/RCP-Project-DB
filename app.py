@@ -31,7 +31,7 @@ try:
     data = load_data(file_target, sheet_pilihan)
     
     # Fitur Pencarian
-    search = st.text_input("🔍 Cari Part Number / Description:")
+search = st.text_input("🔍 Cari Part Number / Description:")
     
     if search:
         mask = data.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)
@@ -39,50 +39,58 @@ try:
     else:
         display_data = data
 
-    # Menampilkan Tabel
-    st.dataframe(display_data, use_container_width=True, hide_index=True)
+    # --- 1. BAGIAN TABEL INTERAKTIF (GANTI DISINI) ---
+    st.subheader("📋 Click a Row to See History")
+    
+    # Simpan pilihan user ke dalam variabel 'event'
+    event = st.dataframe(
+        display_data, 
+        use_container_width=True, 
+        hide_index=True,
+        on_select="rerun",  
+        selection_mode="single_row"
+    )
 
-    # --- BAGIAN GRAFIK ---
-    # Grafik ini akan otomatis muncul di bawah tabel
+    # --- 2. LOGIKA POPUP / DETAIL (MUNCUL JIKA DIKLIK) ---
+    if len(event.selection.rows) > 0:
+        # Mengambil data dari baris yang disentuh/diklik
+        index_terpilih = event.selection.rows[0]
+        row_data = display_data.iloc[index_terpilih]
+        pn_terpilih = row_data['PART NUMBER']
+        
+        st.markdown(f"### 🔍 Detailed History: {pn_terpilih}")
+        with st.container(border=True):
+            col1, col2 = st.columns([1, 2])
+            with col1:
+                st.info(f"**Description:**\n\n{row_data['DESCRIPTION']}")
+                st.metric("Total Removal", f"{row_data['QTY REM']} EA")
+            with col2:
+                st.warning("📅 **Removal Records:**")
+                # Menampilkan kolom detail jika ada di Excel
+                cols_to_show = ['DATE', 'REASON OF REMOVAL', 'REMARK']
+                available = [c for c in cols_to_show if c in display_data.columns]
+                if available:
+                    st.table(display_data[display_data['PART NUMBER'] == pn_terpilih][available])
+                else:
+                    st.write("Detail tanggal/alasan tidak ditemukan di kolom Excel ini.")
+
+    # --- 3. BAGIAN GRAFIK (DI BAWAH TABEL) ---
     st.markdown("---")
     st.subheader("📈 Visualisasi Tren Removal (Top 10)")
-
-    try:
-        # Cek apakah kolom yang dibutuhkan ada di sheet ini
-        # Sesuaikan 'PART NUMBER' dan 'RATE' dengan judul kolom di Excel Bapak
-        # --- BAGIAN GRAFIK ---
-        if 'PART NUMBER' in display_data.columns and 'RATE' in display_data.columns:
-            # 1. Ambil 10 data teratas
-            chart_data = display_data.head(10).copy()
-            
-            # 2. BUAT KOLOM BARU yang menggabungkan P/N dan Description
-            # Kita gunakan .astype(str) supaya tidak error jika ada data kosong
-            chart_data['Label'] = chart_data['PART NUMBER'].astype(str) + " - " + chart_data['DESCRIPTION'].astype(str)
-            
-            fig = px.bar(
-                chart_data, 
-                x='Label',    # GANTI x dari 'PART NUMBER' menjadi 'Label'
-                y='RATE', 
-                text='RATE',
-                title=f"Top 10 Components on {sheet_pilihan}",
-                color='RATE',
-                labels={'RATE': 'Removal Rate', 'Label': 'Component (P/N - Desc)'},
-                color_continuous_scale='Reds',
-                template='plotly_white',
-                height=600    # Kita buat sedikit lebih tinggi agar teks label muat
-            )
-            
-            fig.update_traces(texttemplate='%{text:.2f}', textposition='outside')
-            
-            # Merapikan tampilan sumbu X agar teks miring dan tidak bertumpuk
-            fig.update_layout(xaxis_tickangle=-45)
-            
-            st.plotly_chart(fig, use_container_width=True, key=f"chart_{sheet_pilihan}")        
-        else:
-            st.info("💡 Grafik otomatis akan muncul jika sheet ini memiliki kolom 'PART NUMBER' dan 'RATE'.")
-
-    except Exception as e:
-        st.warning(f"Tidak dapat membuat grafik pada sheet ini: {e}")
+    
+    if 'PART NUMBER' in display_data.columns and 'RATE' in display_data.columns:
+        chart_data = display_data.head(10).copy()
+        chart_data['Label'] = chart_data['PART NUMBER'].astype(str) + " - " + chart_data['DESCRIPTION'].astype(str)
+        
+        fig = px.bar(
+            chart_data, 
+            x='Label', y='RATE', text='RATE',
+            color='RATE', color_continuous_scale='Reds',
+            height=600, template='plotly_white'
+        )
+        fig.update_traces(texttemplate='%{text:.2f}', textposition='outside')
+        fig.update_layout(xaxis_tickangle=-45)
+        st.plotly_chart(fig, use_container_width=True, key=f"chart_{sheet_pilihan}")
 
 except Exception as e:
     st.error(f"Terjadi kesalahan: {e}")
