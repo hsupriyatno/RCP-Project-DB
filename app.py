@@ -1,3 +1,14 @@
+Tenang Pak Hery, saya mengerti. Memang lebih mudah kalau langsung copy-paste kode utuh yang sudah diperbaiki semua bagian error-nya (termasuk menghapus kolom index di kiri).
+
+Berikut adalah kode komplit (Full Code) yang sudah saya perbaiki berdasarkan screenshot error yang Bapak kirimkan tadi:
+
+Menghapus Kolom Index: Ditambahkan hide_index=True di semua tabel.
+
+Fix Error 'DATE': Menambahkan pengecekan kolom sebelum memproses data history agar tidak crash.
+
+Fix Error 'range' & 'NaN': Membersihkan data dari nilai kosong (NaN) agar grafik dan perhitungan tidak error.
+
+Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -17,7 +28,6 @@ st.markdown("""
         border-radius: 10px; 
         box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
     }
-    /* Header tabel rata kiri agar rapi */
     [data-testid="stDataFrame"] div[data-testid="stTable"] th { text-align: left !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -31,8 +41,10 @@ def clean_dynamic_columns(df):
             df = df.iloc[i+1:].copy()
             df.columns = [str(c).strip().upper() for c in new_cols]
             break
+    # Hapus kolom/baris yang benar-benar kosong
     df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
-    df = df.fillna(0) # Proteksi NaN
+    # Ganti NaN dengan 0 agar tidak error saat kalkulasi
+    df = df.fillna(0) 
     if 'RATE' in df.columns:
         df['RATE'] = pd.to_numeric(df['RATE'], errors='coerce').fillna(0)
     if 'QTY REM' in df.columns:
@@ -43,19 +55,20 @@ def clean_dynamic_columns(df):
 @st.cache_data
 def load_all_data(file_name, sheet_name):
     try:
-        # Load period info
+        # Load period dari sheet utama
         df_crit = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None, nrows=3, usecols="A")
         bln_raw = str(df_crit.iloc[1, 0]).strip().upper()
-        thn_raw = str(df_crit.iloc[2, 0]).strip().replace('.0', '')
+        thn_raw = str(df_crit.iloc[2, 0]).strip().split('.')[0] # Menangani '2026.0'
         
-        # Load Main Report
+        # Load data report
         df_main = pd.read_excel(file_name, sheet_name=sheet_name, header=None)
         df_main = clean_dynamic_columns(df_main)
         
-        # Load History
+        # Load history removal
         df_hist = pd.read_excel(file_name, sheet_name="COMPONENT REPLACEMENT")
         df_hist.columns = [str(c).strip().upper() for c in df_hist.columns]
         
+        # Proteksi kolom DATE
         if 'DATE' in df_hist.columns:
             df_hist['DATE_DT'] = pd.to_datetime(df_hist['DATE'], errors='coerce')
             df_hist['DATE_STR'] = df_hist['DATE_DT'].dt.strftime('%d-%m-%Y')
@@ -65,28 +78,25 @@ def load_all_data(file_name, sheet_name):
         st.error(f"Gagal memuat data: {e}")
         return pd.DataFrame(), pd.DataFrame(), "N/A", "N/A"
 
-# 4. LOGIKA PERIODE BULAN (Minus 1 Bulan untuk Analisis)
+# 4. LOGIKA PERIODE (Bulan Analisis = Bulan Report - 1)
 def get_period_info(bulan, tahun):
     m_map = {'JANUARY':1,'FEBRUARY':2,'MARCH':3,'APRIL':4,'MAY':5,'JUNE':6,
              'JULY':7,'AUGUST':8,'SEPTEMBER':9,'OCTOBER':10,'NOVEMBER':11,'DECEMBER':12}
     m_num = m_map.get(bulan, 12)
     try:
-        # Gunakan float lalu int untuk menangani tahun format "2026.0"
-        y_int = int(float(tahun))
-        curr = datetime(y_int, m_num, 1)
+        curr = datetime(int(tahun), m_num, 1)
         prev = curr - timedelta(days=1)
         p_name = [k for k, v in m_map.items() if v == prev.month][0]
         return prev.month, prev.year, p_name
     except:
         return 1, 2026, "JANUARY"
 
-# --- MAIN APP START ---
+# --- MAIN APP ---
 FILE_PATH = 'COMPONENT_RELIABILITY_DHC6-300.xlsm'
 
 try:
     xls = pd.ExcelFile(FILE_PATH)
     st.sidebar.title("Navigation")
-    # Urutkan sheet agar lebih rapi di sidebar
     sheet_pilihan = st.sidebar.selectbox("Pilih Sheet Report:", xls.sheet_names)
     
     df_main, df_history, bln_ref, thn_ref = load_all_data(FILE_PATH, sheet_pilihan)
@@ -98,42 +108,32 @@ try:
 
     # 5. CHART TOP 10
     if 'PART NUMBER' in df_main.columns and 'RATE' in df_main.columns:
-        # Filter hanya yang memiliki RATE > 0 untuk grafik yang lebih bersih
-        df_chart = df_main[df_main['RATE'] > 0].copy()
-        top_10 = df_chart.sort_values(by='RATE', ascending=False).head(10)
+        top_10 = df_main.sort_values(by='RATE', ascending=False).head(10).copy()
+        top_10['LABEL'] = top_10['PART NUMBER'].astype(str) + "<br>" + top_10['DESCRIPTION'].astype(str)
         
-        if not top_10.empty:
-            top_10['LABEL'] = top_10['PART NUMBER'].astype(str) + "<br>" + top_10['DESCRIPTION'].astype(str)
-            
-            st.subheader(f"📈 Top 10 Removal Rate Comparison ({full_period})")
-            fig = px.bar(top_10, x='LABEL', y='RATE', text_auto='.2f')
-            fig.update_traces(marker_color='#F2B200', width=0.4) 
-            fig.update_layout(xaxis_title="PN & DESC", yaxis_title="RATE", xaxis_tickangle=-45)
-            st.plotly_chart(fig, use_container_width=True)
+        st.subheader(f"📈 Top 10 Removal Rate Comparison ({full_period})")
+        fig = px.bar(top_10, x='LABEL', y='RATE', text_auto='.2f')
+        fig.update_traces(marker_color='#F2B200', width=0.4) 
+        fig.update_layout(xaxis_title="PN & DESC", yaxis_title="RATE", xaxis_tickangle=-45)
+        st.plotly_chart(fig, use_container_width=True)
 
-            with st.expander("📊 Click to View Top 10 Data Table"):
-                st.table(top_10[['PART NUMBER', 'DESCRIPTION', 'QTY REM', 'RATE']])
-        else:
-            st.info("Tidak ada data dengan removal rate > 0 pada sheet ini.")
+        with st.expander("📊 View Top 10 Data (Tanpa Index)"):
+            # Menghapus index di sini
+            st.dataframe(top_10[['PART NUMBER', 'DESCRIPTION', 'QTY REM', 'RATE']], use_container_width=True, hide_index=True)
 
     st.divider()
 
     # 6. COMPONENT EXPLORER
     st.subheader("🔍 Component Explorer")
-    search = st.text_input("Cari Part Number atau Deskripsi:", placeholder="Contoh: BRAKE atau 412-...")
+    search = st.text_input("Cari Part Number atau Deskripsi:")
     
     filtered = df_main.copy()
     if search:
         mask = df_main.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)
         filtered = df_main[mask]
 
-    event = st.dataframe(
-        filtered, 
-        use_container_width=True, 
-        hide_index=True, 
-        on_select="rerun", 
-        selection_mode="single-row"
-    )
+    # Menghapus index di tabel utama
+    event = st.dataframe(filtered, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
 
     # 7. PART REMOVAL DETAIL
     if event.selection.rows:
@@ -151,6 +151,8 @@ try:
 
         if not df_history.empty:
             col_pn_h = next((c for c in df_history.columns if 'PART' in c.upper()), None)
+            
+            # Cek kolom DATE_DT untuk menghindari error 'DATE'
             if col_pn_h and 'DATE_DT' in df_history.columns:
                 hist_match = df_history[
                     (df_history[col_pn_h].astype(str).str.strip() == pn_selected) & 
@@ -160,25 +162,25 @@ try:
                 
                 if not hist_match.empty:
                     hist_match['DATE'] = hist_match['DATE_STR']
-                    potential_cols = ['DATE', 'REASON OF REMOVAL', 'TSN', 'TSO']
-                    existing_cols = [c for c in potential_cols if c in hist_match.columns]
+                    cols_to_show = [c for c in ['DATE', 'REASON OF REMOVAL', 'TSN', 'TSO'] if c in hist_match.columns]
                     
+                    # Menghapus index di tabel detail
                     st.dataframe(
-                        hist_match[existing_cols], 
+                        hist_match[cols_to_show], 
                         use_container_width=True, 
                         hide_index=True,
                         column_config={
-                            "DATE": st.column_config.Column("Date", width="small"),
-                            "REASON OF REMOVAL": st.column_config.Column("Reason of Removal", width="large"),
-                            "TSN": st.column_config.Column("TSN", width="small"),
-                            "TSO": st.column_config.Column("TSO", width="small")
+                            "DATE": st.column_config.Column(width="small"),
+                            "REASON OF REMOVAL": st.column_config.Column(width="large")
                         }
                     )
                 else:
                     st.info(f"Tidak ada record removal untuk {pn_selected} pada {full_period}.")
+            else:
+                st.warning("Kolom 'DATE' tidak ditemukan di sheet History.")
 
 except Exception as e:
     st.error(f"Terjadi kesalahan sistem: {e}")
 
 st.sidebar.markdown("---")
-st.sidebar.info("Aviation Reliability Dashboard v1.2 | User: Hery Supriyatno")
+st.sidebar.info(f"Logged in as: {st.session_state.get('user', 'HERY SUPRIYATNO')}")
