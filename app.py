@@ -1,4 +1,3 @@
-Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -116,4 +115,5 @@ try:
 
 except Exception as e:
     st.error(f"Terjadi kesalahan sistem: {e}")
+
 
