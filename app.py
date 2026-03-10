@@ -1,9 +1,3 @@
-Baik, Pak Hery. Saya mengerti, urutan tampilan yang ideal adalah Chart berada di posisi paling atas setelah judul, baru diikuti oleh tabel explorer di bawahnya agar visualisasi utama langsung terlihat.
-
-Saya juga telah mengembalikan fitur Sidebar Navigation di sebelah kiri agar Bapak bisa berpindah antar sheet dengan mudah.
-
-Berikut adalah kode yang sudah disusun ulang urutannya (Chart di atas) dan tetap menggunakan sheet COMPONENT REPLACEMENT:
-
 Python
 import streamlit as st
 import pandas as pd
@@ -122,3 +116,4 @@ try:
 
 except Exception as e:
     st.error(f"Terjadi kesalahan sistem: {e}")
+
