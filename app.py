@@ -1,16 +1,3 @@
-Mohon maaf, Pak Hery. Saya mengerti, maksud Bapak adalah menggabungkan fitur Uptrend yang baru tanpa menghapus fitur Top 10 Summary dan Detail Removal yang sudah berjalan baik sebelumnya.
-
-Berikut adalah kode v1.9 yang menggabungkan semuanya secara utuh:
-
-Top 10 Removal Summary (Tabel di bawah Chart).
-
-Part Removal Detail (Muncul saat baris di Explorer diklik).
-
-Uptrend Part Removal (Tabel Early Warning di paling bawah).
-
-Akses Langsung Kolom I, L, O dari sheet REMOVAL RATE CALCULATION.
-
-Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -154,3 +141,4 @@ except Exception as e:
     st.error(f"Terjadi kesalahan: {e}")
 
 st.sidebar.info(f"Aviation Reliability Dashboard\nUser: Hery Supriyatno")
+
