@@ -1,10 +1,3 @@
-Mohon maaf sekali, Pak Hery. Sepertinya saat saya merapikan kode CSS untuk mengecilkan huruf metrik tadi, bagian Summary Table yang ada di dalam expander tidak sengaja tergeser atau terhapus.
-
-Mari kita kembalikan tombol "View Top 10 Summary Table" tersebut tepat di bawah Chart dan di atas Component Explorer.
-
-Berikut adalah kode lengkap dengan CSS (huruf kecil), Judul PART REMOVAL DETAIL, dan Tombol Summary Chart yang sudah kembali:
-
-Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -135,3 +128,4 @@ try:
 
 except Exception as e:
     st.error(f"Critical System Error: {e}")
+
