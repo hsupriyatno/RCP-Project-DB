@@ -1,8 +1,3 @@
-Waduh, sepertinya ada teks penjelasan atau komentar yang tidak sengaja masuk ke dalam baris kode Python Bapak, sehingga menyebabkan SyntaxError karena Python mencoba membaca teks biasa sebagai kode program. Selain itu, error 'DATE' muncul karena sistem tidak menemukan kolom tanggal yang sesuai di sheet history.
-
-Berikut adalah kode yang sudah saya bersihkan total. Saya juga menambahkan proteksi agar jika kolom REMARK atau DATE tidak ada, dashboard tetap jalan dan tidak memunculkan kotak merah.
-
-Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -176,3 +171,4 @@ except Exception as e:
 
 st.sidebar.markdown("---")
 st.sidebar.info("User: HERY SUPRIYATNO")
+
