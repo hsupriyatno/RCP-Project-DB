@@ -17,12 +17,18 @@ st.markdown("""
         border-radius: 10px; 
         box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
     }
-    /* Header tabel rata kiri agar rapi */
-    [data-testid="stDataFrame"] div[data-testid="stTable"] th { text-align: left !important; }
+    /* Mengatur agar area chart tidak menahan scroll jari di HP */
+    .js-plotly-plot .plotly .nsewdrag {
+        pointer-events: none !important;
+    }
+    /* Tetap biarkan hover info muncul */
+    .js-plotly-plot .plotly .hoverlayer {
+        pointer-events: auto !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. FUNGSI PEMBERSIH DATA DINAMIS (TIDAK DIUBAH)
+# 2. FUNGSI PEMBERSIH DATA DINAMIS (TETAP SAMA)
 def clean_dynamic_columns(df):
     for i in range(len(df)):
         row_values = [str(val).upper() for val in df.iloc[i].values]
@@ -39,7 +45,7 @@ def clean_dynamic_columns(df):
         df['QTY REM'] = pd.to_numeric(df['QTY REM'], errors='coerce').fillna(0)
     return df
 
-# 3. FUNGSI LOAD DATA (TIDAK DIUBAH)
+# 3. FUNGSI LOAD DATA (TETAP SAMA)
 @st.cache_data
 def load_all_data(file_name, sheet_name):
     try:
@@ -62,7 +68,7 @@ def load_all_data(file_name, sheet_name):
         st.error(f"Gagal memuat data: {e}")
         return pd.DataFrame(), pd.DataFrame(), "N/A", "N/A"
 
-# 4. LOGIKA PERIODE BULAN (TIDAK DIUBAH)
+# 4. LOGIKA PERIODE BULAN (TETAP SAMA)
 def get_period_info(bulan, tahun):
     m_map = {'JANUARY':1,'FEBRUARY':2,'MARCH':3,'APRIL':4,'MAY':5,'JUNE':6,
              'JULY':7,'AUGUST':8,'SEPTEMBER':9,'OCTOBER':10,'NOVEMBER':11,'DECEMBER':12}
@@ -90,7 +96,7 @@ try:
     st.title(f"📊 Reliability Analysis: {sheet_pilihan}")
     st.caption(f"Reporting Period: {bln_ref} {thn_ref} | Analysis Data: {full_period}")
 
-    # 5. CHART (DIBUAT STABIL UNTUK HP)
+    # 5. CHART (OPTIMASI SCROLL HP)
     if 'PART NUMBER' in df_main.columns and 'RATE' in df_main.columns:
         top_10 = df_main.sort_values(by='RATE', ascending=False).head(10).copy()
         top_10['LABEL'] = top_10['PART NUMBER'].astype(str) + "<br>" + top_10['DESCRIPTION'].astype(str)
@@ -98,27 +104,28 @@ try:
         st.subheader(f"📈 Top 10 Removal Rate Comparison ({full_period})")
         fig = px.bar(top_10, x='LABEL', y='RATE', text_auto='.2f')
         fig.update_traces(marker_color='#F2B200', width=0.4) 
+        
         fig.update_layout(
             xaxis_title="PN & DESC", 
             yaxis_title="RATE", 
             xaxis_tickangle=-45,
-            dragmode=False, # Mematikan zoom drag agar stabil di HP
-            hovermode="closest"
+            dragmode=False, # Mematikan penangkapan kursor untuk geser chart
+            hovermode="closest",
+            margin=dict(l=20, r=20, t=20, b=20)
         )
         
-        # MENGGUNAKAN CONFIG UNTUK MEMATIKAN INTERAKSI YANG MENGGANGGU DI HP
+        # Penambahan Config untuk melepas kendali scroll ke Browser HP
         st.plotly_chart(
             fig, 
             use_container_width=True, 
             config={
-                'staticPlot': False, # Tetap bisa hover (melihat angka)
-                'scrollZoom': False, # Matikan scroll zoom
-                'displayModeBar': False, # Sembunyikan floating bar (zoom, pan, dll)
-                'doubleClick': 'reset' # Double click hanya reset, bukan zoom
+                'scrollZoom': False,
+                'displayModeBar': False,
+                'staticPlot': False # Masih bisa diketuk untuk lihat data, tapi tidak menahan scroll
             }
         )
 
-        with st.expander("📊 Click to View Top 10 Data Table"):
+        with st.expander("📊 View Top 10 Data Table"):
             st.dataframe(top_10[['PART NUMBER', 'DESCRIPTION', 'QTY REM', 'RATE']], use_container_width=True, hide_index=True)
 
     st.divider()
@@ -132,6 +139,7 @@ try:
         mask = df_main.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)
         filtered = df_main[mask]
 
+    # Menghapus index agar bersih
     event = st.dataframe(filtered, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
 
     # 7. PART REMOVAL DETAIL
@@ -159,19 +167,10 @@ try:
                 
                 if not hist_match.empty:
                     hist_match['DATE'] = hist_match['DATE_STR']
-                    potential_cols = ['DATE', 'REASON OF REMOVAL', 'TSN', 'TSO']
-                    existing_cols = [c for c in potential_cols if c in hist_match.columns]
-                    
                     st.dataframe(
-                        hist_match[existing_cols], 
+                        hist_match[['DATE', 'REASON OF REMOVAL', 'TSN', 'TSO']], 
                         use_container_width=True, 
-                        hide_index=True,
-                        column_config={
-                            "DATE": st.column_config.Column(width="small"),
-                            "REASON OF REMOVAL": st.column_config.Column(width="large"),
-                            "TSN": st.column_config.Column(width="small"),
-                            "TSO": st.column_config.Column(width="small")
-                        }
+                        hide_index=True
                     )
                 else:
                     st.info(f"Tidak ada record removal untuk {pn_selected} pada {full_period}.")
@@ -180,4 +179,4 @@ except Exception as e:
     st.error(f"Terjadi kesalahan sistem: {e}")
 
 st.sidebar.markdown("---")
-st.sidebar.info("Aviation Reliability Dashboard v1.4 | User: Hery Supriyatno")
+st.sidebar.info("Dashboard v1.5 | User: Hery Supriyatno")
