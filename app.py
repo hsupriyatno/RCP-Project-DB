@@ -51,26 +51,33 @@ try:
         # Cek apakah kolom yang dibutuhkan ada di sheet ini
         # Sesuaikan 'PART NUMBER' dan 'RATE' dengan judul kolom di Excel Bapak
 # --- BAGIAN GRAFIK ---
-        if 'PART NUMBER' in display_data.columns and 'RATE' in display_data.columns:
-            chart_data = display_data.head(10)
+if 'PART NUMBER' in display_data.columns and 'RATE' in display_data.columns:
+            # 1. Ambil 10 data teratas
+            chart_data = display_data.head(10).copy()
+            
+            # 2. BUAT KOLOM BARU yang menggabungkan P/N dan Description
+            # Kita gunakan .astype(str) supaya tidak error jika ada data kosong
+            chart_data['Label'] = chart_data['PART NUMBER'].astype(str) + " - " + chart_data['DESCRIPTION'].astype(str)
             
             fig = px.bar(
                 chart_data, 
-                x='PART NUMBER', 
+                x='Label',    # GANTI x dari 'PART NUMBER' menjadi 'Label'
                 y='RATE', 
                 text='RATE',
                 title=f"Top 10 Components on {sheet_pilihan}",
                 color='RATE',
-                labels={'RATE': 'Removal Rate', 'PART NUMBER': 'P/N'},
+                labels={'RATE': 'Removal Rate', 'Label': 'Component (P/N - Desc)'},
                 color_continuous_scale='Reds',
-                template='plotly_white'
+                template='plotly_white',
+                height=600    # Kita buat sedikit lebih tinggi agar teks label muat
             )
             
             fig.update_traces(texttemplate='%{text:.2f}', textposition='outside')
             
-            # PAKAI SATU INI SAJA, Pastikan sejajar dengan baris fig.update_traces
-            st.plotly_chart(fig, use_container_width=True, key=f"chart_{sheet_pilihan}")
-        else:
+            # Merapikan tampilan sumbu X agar teks miring dan tidak bertumpuk
+            fig.update_layout(xaxis_tickangle=-45)
+            
+            st.plotly_chart(fig, use_container_width=True, key=f"chart_{sheet_pilihan}")        else:
             st.info("💡 Grafik otomatis akan muncul jika sheet ini memiliki kolom 'PART NUMBER' dan 'RATE'.")
 
     except Exception as e:
@@ -78,5 +85,6 @@ try:
 
 except Exception as e:
     st.error(f"Terjadi kesalahan: {e}")
+
 
 
