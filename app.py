@@ -132,7 +132,7 @@ try:
         selection_mode="single-row"
     )
 
-    # 7. PART REMOVAL DETAIL (Proporsi Baru: Deskripsi Lebih Lebar)
+# 7. PART REMOVAL DETAIL (Proporsi Baru: Deskripsi Lebih Lebar)
         st.write("---")
         st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn_selected}")
         
@@ -176,4 +176,5 @@ except Exception as e:
 # Footer
 st.sidebar.markdown("---")
 st.sidebar.info("Aviation Reliability Dashboard v1.2")
+
 
