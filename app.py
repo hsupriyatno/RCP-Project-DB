@@ -3,25 +3,10 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta
 
-# 1. KONFIGURASI HALAMAN & CSS
+# 1. KONFIGURASI HALAMAN
 st.set_page_config(page_title="Reliability Dashboard | Airfast Indonesia", layout="wide")
 
-st.markdown("""
-    <style>
-    .main { background-color: #f5f7f9; }
-    [data-testid="stMetricLabel"] { font-size: 14px !important; }
-    [data-testid="stMetricValue"] { font-size: 22px !important; }
-    .stMetric { 
-        background-color: #ffffff; 
-        padding: 15px; 
-        border-radius: 10px; 
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
-        text-align: center;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-# 2. FUNGSI PEMBERSIH DATA
+# 2. FUNGSI PEMBERSIH & LOAD DATA
 def clean_dynamic_columns(df):
     for i in range(len(df)):
         row_values = [str(val).upper() for val in df.iloc[i].values]
@@ -32,32 +17,25 @@ def clean_dynamic_columns(df):
             break
     df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
     df = df.fillna(0)
-    
     if 'RATE' in df.columns:
         df['RATE'] = pd.to_numeric(df['RATE'], errors='coerce').fillna(0)
     if 'QTY REM' in df.columns:
         df['QTY REM'] = pd.to_numeric(df['QTY REM'], errors='coerce').fillna(0)
-        
     return df
 
-# 3. FUNGSI LOAD DATA
 @st.cache_data
 def load_all_data(file_name, sheet_name):
     try:
-        # Load period info from Sheet 1
         df_crit = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None, nrows=3, usecols="A")
         bln_raw = str(df_crit.iloc[1, 0]).strip().upper()
         thn_raw = str(df_crit.iloc[2, 0]).strip().replace('.0', '')
         
-        # Load main data from selected sheet
         df_main = pd.read_excel(file_name, sheet_name=sheet_name, header=None)
         df_main = clean_dynamic_columns(df_main)
         
-        # Load History (Sheet Index 2)
         df_hist = pd.read_excel(file_name, sheet_name=2) 
         df_hist.columns = [str(c).strip().upper() for c in df_hist.columns]
         
-        # Flexibly find date column
         date_col = next((c for c in df_hist.columns if 'DATE' in c), None)
         if date_col:
             df_hist['DATE_DT'] = pd.to_datetime(df_hist[date_col], errors='coerce')
@@ -68,7 +46,7 @@ def load_all_data(file_name, sheet_name):
         st.error(f"Gagal memuat data: {e}")
         return pd.DataFrame(), pd.DataFrame(), "N/A", "N/A"
 
-# 4. LOGIKA PERIODE
+# 3. LOGIKA PERIODE
 def get_period_info(bulan, tahun):
     m_map = {'JANUARY':1,'FEBRUARY':2,'MARCH':3,'APRIL':4,'MAY':5,'JUNE':6,
              'JULY':7,'AUGUST':8,'SEPTEMBER':9,'OCTOBER':10,'NOVEMBER':11,'DECEMBER':12}
@@ -87,68 +65,68 @@ FILE_PATH = 'COMPONENT_RELIABILITY_DHC6-300.xlsm'
 
 try:
     xls = pd.ExcelFile(FILE_PATH)
-    st.sidebar.title("Navigation")
-    sheet_pilihan = st.sidebar.selectbox("Pilih Sheet Report:", xls.sheet_names, key="main_nav")
+    sheet_pilihan = st.sidebar.selectbox("Pilih Sheet Report:", xls.sheet_names)
     
     df_main, df_history, bln_ref, thn_ref = load_all_data(FILE_PATH, sheet_pilihan)
     target_m, target_y, target_m_name = get_period_info(bln_ref, thn_ref)
     full_period = f"{target_m_name} {target_y}"
 
     st.title(f"📊 Reliability Analysis: {sheet_pilihan}")
-    st.caption(f"Reporting Period: {bln_ref} {thn_ref} | Analysis Period: {full_period}")
-
-    # Summary Metrics
+    
+    # METRICS
     if not df_main.empty:
         c1, c2, c3 = st.columns(3)
         c1.metric("Total Components", f"{len(df_main)} Items")
-        c2.metric("Total Monthly Removals", f"{int(df_main['QTY REM'].sum())} EA")
-        c3.metric("Average Removal Rate", f"{df_main['RATE'].mean():.2f}")
-    
+        c2.metric("Total Removals", f"{int(df_main['QTY REM'].sum())} EA")
+        c3.metric("Avg Rate", f"{df_main['RATE'].mean():.2f}")
+
     st.divider()
 
-    # 5. CHART & "VIEW DATA TABLE" BUTTON
+    # 4. CHART & TOMBOL DATA TABLE (TOP 10)
     if 'PART NUMBER' in df_main.columns and 'RATE' in df_main.columns:
-        top_10 = df_main.sort_values(by='RATE', ascending=False).head(10).copy()
-        top_10['LABEL'] = top_10['PART NUMBER'].astype(str) + "<br>" + top_10['DESCRIPTION'].astype(str)
-        
         st.subheader(f"📈 Top 10 Removal Rate ({full_period})")
+        top_10 = df_main.sort_values(by='RATE', ascending=False).head(10).copy()
+        top_10['LABEL'] = top_10['PART NUMBER'].astype(str) + " - " + top_10['DESCRIPTION'].astype(str)
+        
         fig = px.bar(top_10, x='LABEL', y='RATE', text_auto='.2f')
-        fig.update_traces(marker_color='#F2B200', width=0.4) 
-        fig.update_layout(xaxis_title="PN & DESC", yaxis_title="RATE", xaxis_tickangle=-45)
+        fig.update_traces(marker_color='#F2B200')
         st.plotly_chart(fig, use_container_width=True)
 
-        # Tombol untuk memunculkan tabel detail Top 10
-        with st.expander("📊 Click to View Top 10 Data Table"):
+        # PASTIKAN INI MUNCUL: Tabel di bawah chart
+        with st.expander("👉 KLIK DISINI UNTUK LIHAT TABEL DATA TOP 10", expanded=False):
+            st.write("Data detail untuk 10 Part Number dengan Rate tertinggi:")
             st.table(top_10[['PART NUMBER', 'DESCRIPTION', 'QTY REM', 'RATE']])
 
     st.divider()
 
-    # 6. COMPONENT EXPLORER
+    # 5. COMPONENT EXPLORER
     st.subheader("🔍 Component Explorer")
-    search = st.text_input("Search PN/Desc:", key="comp_search")
+    search = st.text_input("Cari Part Number atau Deskripsi:")
     
     filtered = df_main.copy()
     if search:
         mask = df_main.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)
         filtered = df_main[mask]
 
-    event = st.dataframe(filtered, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row", key="explorer_table")
+    # Menggunakan on_select untuk interaksi tabel
+    event = st.dataframe(
+        filtered, 
+        use_container_width=True, 
+        hide_index=True, 
+        on_select="rerun", 
+        selection_mode="single-row"
+    )
 
-    # 7. PART REMOVAL DETAIL (TABLE PENDUKUNG)
+    # 6. TABEL DETAIL REMOVAL (HISTORY)
     if event.selection.rows:
-        selected_idx = event.selection.rows[0]
-        row = filtered.iloc[selected_idx]
+        idx = event.selection.rows[0]
+        row = filtered.iloc[idx]
         pn_selected = str(row['PART NUMBER']).strip()
         
         st.write("---")
-        st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn_selected}")
+        st.subheader(f"🛠️ DETAIL REMOVAL: {pn_selected}")
         
-        m1, m2, m3 = st.columns([5, 1, 1])
-        with m1: st.metric("Description", row.get('DESCRIPTION', 'N/A'))
-        with m2: st.metric("Current Rate", f"{row.get('RATE', 0):.2f}")
-        with m3: st.metric("Total Qty Rem", f"{int(row.get('QTY REM', 0))} EA")
-
-        # MENAMPILKAN KEMBALI TABEL DETAIL
+        # Tampilkan tabel history jika data tersedia
         if not df_history.empty:
             col_pn_h = next((c for c in df_history.columns if 'PART' in c), None)
             if col_pn_h and 'DATE_DT' in df_history.columns:
@@ -159,15 +137,14 @@ try:
                 ].copy()
                 
                 if not hist_match.empty:
-                    # Tampilkan kolom yang tersedia agar tidak error
-                    display_cols = ['DATE_STR', 'REASON OF REMOVAL', 'REMARK', 'TSN', 'TSO']
-                    existing_cols = [c for c in display_cols if c in hist_match.columns]
-                    st.dataframe(hist_match[existing_cols], use_container_width=True, hide_index=True)
+                    cols_to_show = ['DATE_STR', 'REASON OF REMOVAL', 'REMARK', 'TSN', 'TSO']
+                    existing = [c for c in cols_to_show if c in hist_match.columns]
+                    st.dataframe(hist_match[existing], use_container_width=True, hide_index=True)
                 else:
-                    st.info(f"No removal records found for {pn_selected} in {full_period}.")
+                    st.warning(f"Tidak ada record history untuk {pn_selected} pada periode {full_period}.")
 
 except Exception as e:
-    st.error(f"Sistem Error: {e}")
+    st.error(f"Terjadi kesalahan sistem: {e}")
 
 st.sidebar.markdown("---")
 st.sidebar.info("User: HERY SUPRIYATNO")
