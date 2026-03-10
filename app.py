@@ -6,11 +6,23 @@ from datetime import datetime, timedelta
 # 1. Konfigurasi Standar Profesional
 st.set_page_config(page_title="Reliability Dashboard | Airfast Indonesia", layout="wide")
 
-# Custom CSS untuk tampilan lebih rapi
+# Custom CSS untuk mengecilkan ukuran huruf metrik
 st.markdown("""
     <style>
     .main { background-color: #f5f7f9; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    /* CSS untuk mengecilkan label dan nilai pada Metric Card */
+    [data-testid="stMetricLabel"] {
+        font-size: 14px !important;
+    }
+    [data-testid="stMetricValue"] {
+        font-size: 24px !important; /* Ukuran angka/nilai diperkecil */
+    }
+    .stMetric { 
+        background-color: #ffffff; 
+        padding: 10px; 
+        border-radius: 10px; 
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -148,5 +160,6 @@ try:
 
 except Exception as e:
     st.error(f"Critical System Error: {e}")
+
 
 
