@@ -1,12 +1,20 @@
+Baik, Pak Hery. Saya mengerti, urutan tampilan yang ideal adalah Chart berada di posisi paling atas setelah judul, baru diikuti oleh tabel explorer di bawahnya agar visualisasi utama langsung terlihat.
+
+Saya juga telah mengembalikan fitur Sidebar Navigation di sebelah kiri agar Bapak bisa berpindah antar sheet dengan mudah.
+
+Berikut adalah kode yang sudah disusun ulang urutannya (Chart di atas) dan tetap menggunakan sheet COMPONENT REPLACEMENT:
+
+Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta
 
-# 1. Konfigurasi Halaman & UI Profesional
+# 1. Konfigurasi Halaman & Sidebar
 st.set_page_config(page_title="Reliability Dashboard | Airfast Indonesia", layout="wide")
 
 def clean_df(df):
+    """Membersihkan dataframe dari spasi dan kolom kosong"""
     df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
     df.columns = [str(col).strip() for col in df.columns]
     return df
@@ -15,12 +23,12 @@ def clean_df(df):
 @st.cache_data
 def load_reliability_data(file_name):
     try:
-        # Ambil kriteria periode dari sheet utama (A2 & A3)
+        # Ambil periode laporan (A2 & A3)
         df_crit = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None, nrows=3, usecols="A")
         bln_ref = str(df_crit.iloc[1, 0]).strip().upper()
         thn_ref = str(df_crit.iloc[2, 0]).strip().replace('.0', '')
         
-        # Load History (Sheet yang dikoreksi Bapak)
+        # Load History dari sheet COMPONENT REPLACEMENT
         df_hist = pd.read_excel(file_name, sheet_name="COMPONENT REPLACEMENT", header=0)
         df_hist = clean_df(df_hist)
         if 'DATE' in df_hist.columns:
@@ -28,26 +36,24 @@ def load_reliability_data(file_name):
             
         return df_hist, bln_ref, thn_ref
     except Exception as e:
-        st.error(f"Gagal memuat data dasar: {e}")
+        st.error(f"Gagal memuat file: {e}")
         return pd.DataFrame(), "N/A", "N/A"
 
-# --- LOGIKA UTAMA ---
+# --- PROSES DATA ---
+FILE_PATH = 'COMPONENT_RELIABILITY_DHC6-300.xlsm'
+
 try:
-    FILE_PATH = 'COMPONENT_RELIABILITY_DHC6-300.xlsm'
     xls = pd.ExcelFile(FILE_PATH)
-    
-    # MUAT DATA DASAR & KRITERIA
     df_history, bulan_excel, tahun_excel = load_reliability_data(FILE_PATH)
-    
-    # LOGIKA NAVIGASI (SIDEBAR) - INI YANG KEMBALI DIMUNCULKAN
+
+    # 3. SIDEBAR NAVIGATION
     st.sidebar.title("🚀 Navigation")
     all_sheets = xls.sheet_names
     sheet_pilihan = st.sidebar.selectbox("Select Report Sheet:", all_sheets)
     
-    # LOGIKA PENGURANGAN 1 BULAN (Contoh: Dec -> Nov)
+    # Logika Pengurangan 1 Bulan untuk Filter
     months_map = {'JANUARY':1,'FEBRUARY':2,'MARCH':3,'APRIL':4,'MAY':5,'JUNE':6,
                   'JULY':7,'AUGUST':8,'SEPTEMBER':9,'OCTOBER':10,'NOVEMBER':11,'DECEMBER':12}
-    
     m_num = months_map.get(bulan_excel, 12)
     current_dt = datetime(int(tahun_excel) if tahun_excel.isdigit() else 2026, m_num, 1)
     prev_dt = current_dt - timedelta(days=1)
@@ -58,52 +64,50 @@ try:
     st.sidebar.markdown("---")
     st.sidebar.info(f"📅 **Excel Period:** {bulan_excel} {tahun_excel}\n\n🔍 **Displaying:** {target_m_name} {target_y}")
 
-    # HEADER DASHBOARD
+    # 4. MAIN DASHBOARD
     st.title(f"📊 Reliability Analysis: {sheet_pilihan}")
-    
-    # LOAD DATA SHEET YANG DIPILIH
+
+    # Load Data Sheet yang dipilih
     df_main = pd.read_excel(FILE_PATH, sheet_name=sheet_pilihan, header=1)
     df_main = clean_df(df_main)
 
-    # SECTION: TOP 10 & CHART
     if 'RATE' in df_main.columns and 'PART NUMBER' in df_main.columns:
         df_main['RATE'] = pd.to_numeric(df_main['RATE'], errors='coerce').fillna(0)
         top_10 = df_main.sort_values(by='RATE', ascending=False).head(10)
-        
-        col_a, col_b = st.columns([1, 1])
-        with col_a:
-            st.subheader(f"🏆 Top 10 Removal Rate ({target_m_name})")
-            st.dataframe(top_10[['PART NUMBER', 'DESCRIPTION', 'RATE']], use_container_width=True, hide_index=True)
-        with col_b:
-            fig = px.bar(top_10, x='PART NUMBER', y='RATE', color='RATE', color_continuous_scale='Reds')
-            st.plotly_chart(fig, use_container_width=True)
+
+        # --- POSISI CHART PALING ATAS ---
+        st.subheader(f"📈 Top 10 Removal Rate Chart ({target_m_name})")
+        fig = px.bar(top_10, x='PART NUMBER', y='RATE', color='RATE', 
+                     color_continuous_scale='Reds', text_auto='.2f')
+        fig.update_layout(height=400)
+        st.plotly_chart(fig, use_container_width=True)
 
     st.divider()
 
-    # SECTION: EXPLORER
+    # 5. COMPONENT EXPLORER (DI BAWAH CHART)
     st.subheader("🔍 Component Explorer")
     search = st.text_input("Cari Part Number atau Deskripsi:")
     
     if search:
         df_main = df_main[df_main.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)]
 
-    # Tabel Utama Interaktif
-    event = st.dataframe(df_main, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
+    # Tabel interaktif
+    selection = st.dataframe(df_main, use_container_width=True, hide_index=True, 
+                             on_select="rerun", selection_mode="single-row")
 
-    # DETAIL HISTORY (DRILL-DOWN)
-    if event.selection.rows:
-        row = df_main.iloc[event.selection.rows[0]]
-        pn_selected = str(row['PART NUMBER']).strip()
+    # 6. DETAIL HISTORY (DRILL-DOWN)
+    if selection.selection.rows:
+        row_idx = selection.selection.rows[0]
+        selected_pn = str(df_main.iloc[row_idx]['PART NUMBER']).strip()
         
-        st.info(f"### 🛠️ Maintenance History for P/N: {pn_selected}")
+        st.info(f"### 🛠️ Maintenance History for P/N: {selected_pn}")
         
         if not df_history.empty:
-            # Cari kolom P/N yang benar di history
             col_pn_hist = 'PART NUMBER OFF' if 'PART NUMBER OFF' in df_history.columns else 'PART NUMBER'
             
-            # Filter berdasarkan P/N dan Periode Bulan Sebelumnya
+            # Filter History berdasarkan P/N dan Periode
             hist_match = df_history[
-                (df_history[col_pn_hist].astype(str).str.strip() == pn_selected) &
+                (df_history[col_pn_hist].astype(str).str.strip() == selected_pn) &
                 (df_history['DATE'].dt.month == target_m_num) &
                 (df_history['DATE'].dt.year == target_y)
             ]
@@ -114,7 +118,7 @@ try:
             if not hist_match.empty:
                 st.table(hist_match[available])
             else:
-                st.warning(f"Tidak ada record removal pada bulan {target_m_name} {target_y}.")
+                st.warning(f"Tidak ditemukan catatan removal untuk {selected_pn} pada periode {target_m_name} {target_y}.")
 
 except Exception as e:
-    st.error(f"Terjadi kesalahan: {e}")
+    st.error(f"Terjadi kesalahan sistem: {e}")
