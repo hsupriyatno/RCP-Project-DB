@@ -18,9 +18,6 @@ st.markdown("""
         box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
         text-align: center;
     }
-    [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th {
-        text-align: center !important;
-    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -34,7 +31,7 @@ def clean_dynamic_columns(df):
             df.columns = [str(c).strip().upper() for c in new_cols]
             break
     df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
-    df = df.fillna(0) # Proteksi agar tidak error float NaN
+    df = df.fillna(0)
     
     if 'RATE' in df.columns:
         df['RATE'] = pd.to_numeric(df['RATE'], errors='coerce').fillna(0)
@@ -47,18 +44,20 @@ def clean_dynamic_columns(df):
 @st.cache_data
 def load_all_data(file_name, sheet_name):
     try:
+        # Load period info from Sheet 1
         df_crit = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None, nrows=3, usecols="A")
         bln_raw = str(df_crit.iloc[1, 0]).strip().upper()
         thn_raw = str(df_crit.iloc[2, 0]).strip().replace('.0', '')
         
+        # Load main data from selected sheet
         df_main = pd.read_excel(file_name, sheet_name=sheet_name, header=None)
         df_main = clean_dynamic_columns(df_main)
         
-        # Load History (Sheet ke-3)
+        # Load History (Sheet Index 2)
         df_hist = pd.read_excel(file_name, sheet_name=2) 
         df_hist.columns = [str(c).strip().upper() for c in df_hist.columns]
         
-        # Cari kolom tanggal secara fleksibel
+        # Flexibly find date column
         date_col = next((c for c in df_hist.columns if 'DATE' in c), None)
         if date_col:
             df_hist['DATE_DT'] = pd.to_datetime(df_hist[date_col], errors='coerce')
@@ -81,7 +80,7 @@ def get_period_info(bulan, tahun):
         p_name = [k for k, v in m_map.items() if v == prev.month][0]
         return prev.month, prev.year, p_name
     except:
-        return 11, 2025, "NOVEMBER"
+        return 1, 2026, "JANUARY"
 
 # --- MAIN APP ---
 FILE_PATH = 'COMPONENT_RELIABILITY_DHC6-300.xlsm'
@@ -96,7 +95,7 @@ try:
     full_period = f"{target_m_name} {target_y}"
 
     st.title(f"📊 Reliability Analysis: {sheet_pilihan}")
-    st.caption(f"Period: {bln_ref} {thn_ref} | Analysis: {full_period}")
+    st.caption(f"Reporting Period: {bln_ref} {thn_ref} | Analysis Period: {full_period}")
 
     # Summary Metrics
     if not df_main.empty:
@@ -107,7 +106,7 @@ try:
     
     st.divider()
 
-    # 5. CHART & SUMMARY TABLE
+    # 5. CHART & "VIEW DATA TABLE" BUTTON
     if 'PART NUMBER' in df_main.columns and 'RATE' in df_main.columns:
         top_10 = df_main.sort_values(by='RATE', ascending=False).head(10).copy()
         top_10['LABEL'] = top_10['PART NUMBER'].astype(str) + "<br>" + top_10['DESCRIPTION'].astype(str)
@@ -118,6 +117,7 @@ try:
         fig.update_layout(xaxis_title="PN & DESC", yaxis_title="RATE", xaxis_tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
 
+        # Tombol untuk memunculkan tabel detail Top 10
         with st.expander("📊 Click to View Top 10 Data Table"):
             st.table(top_10[['PART NUMBER', 'DESCRIPTION', 'QTY REM', 'RATE']])
 
@@ -134,7 +134,7 @@ try:
 
     event = st.dataframe(filtered, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row", key="explorer_table")
 
-    # 7. PART REMOVAL DETAIL
+    # 7. PART REMOVAL DETAIL (TABLE PENDUKUNG)
     if event.selection.rows:
         selected_idx = event.selection.rows[0]
         row = filtered.iloc[selected_idx]
@@ -148,7 +148,7 @@ try:
         with m2: st.metric("Current Rate", f"{row.get('RATE', 0):.2f}")
         with m3: st.metric("Total Qty Rem", f"{int(row.get('QTY REM', 0))} EA")
 
-        # Tampilkan History dengan proteksi kolom
+        # MENAMPILKAN KEMBALI TABEL DETAIL
         if not df_history.empty:
             col_pn_h = next((c for c in df_history.columns if 'PART' in c), None)
             if col_pn_h and 'DATE_DT' in df_history.columns:
@@ -159,16 +159,15 @@ try:
                 ].copy()
                 
                 if not hist_match.empty:
-                    # Ambil hanya kolom yang ada saja (biar tidak error 'DATE' atau 'REMARK')
-                    display_cols = ['DATE_STR', 'REASON OF REMOVAL', 'TSN', 'TSO']
+                    # Tampilkan kolom yang tersedia agar tidak error
+                    display_cols = ['DATE_STR', 'REASON OF REMOVAL', 'REMARK', 'TSN', 'TSO']
                     existing_cols = [c for c in display_cols if c in hist_match.columns]
                     st.dataframe(hist_match[existing_cols], use_container_width=True, hide_index=True)
                 else:
-                    st.info(f"No removal records for {pn_selected} in {full_period}.")
+                    st.info(f"No removal records found for {pn_selected} in {full_period}.")
 
 except Exception as e:
     st.error(f"Sistem Error: {e}")
 
 st.sidebar.markdown("---")
 st.sidebar.info("User: HERY SUPRIYATNO")
-
