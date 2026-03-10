@@ -26,18 +26,19 @@ def load_data(file_name, sheet_name):
     return df
 
 try:
-    # Nama file harus sama persis dengan yang ada di GitHub
     file_target = 'COMPONENT_RELIABILITY_DHC6-300.xlsm'
     xls = pd.ExcelFile(file_target)
     
-    # Pilih Sheet di Sidebar kiri
+    # Menu pilihan sheet
     sheet_pilihan = st.sidebar.selectbox("Pilih Halaman (Sheet):", xls.sheet_names)
     
+    # Tampilkan Judul Laporan dengan format besar (diambil dari nama sheet atau teks statis)
+    st.markdown(f"### 📊 {sheet_pilihan}: TOP 10 HIGHEST REMOVAL RATE")
+    
+    # Load data (tetap pakai header=1 agar kolom Part Number dkk jadi Header)
     data = load_data(file_target, sheet_pilihan)
     
-    st.subheader(f"📊 Data Sheet: {sheet_pilihan}")
-    
-    # Fitur Pencarian Part Number atau Description
+    # Kotak Pencarian
     search = st.text_input("🔍 Cari Part Number / Description:")
     
     if search:
@@ -47,8 +48,7 @@ try:
         st.dataframe(data, use_container_width=True, hide_index=True)
 
 except Exception as e:
-    st.error(f"Terjadi kesalahan: {e}")
-    st.info("Pastikan file 'COMPONENT_RELIABILITY_DHC6-300.xlsm' sudah di-upload ke GitHub.")
+    st.error(f"Error: {e}")
 
 
 
