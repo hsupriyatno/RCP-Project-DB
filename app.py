@@ -6,6 +6,24 @@ st.set_page_config(page_title="Reliability DHC6-300", layout="wide")
 
 st.title("✈️ Reliability Dashboard DHC6-300")
 
+@st.cache_data
+def load_data(file_name, sheet_name):
+    # 1. Kita gunakan header=1 agar baris judul di Excel naik ke atas
+    df = pd.read_excel(file_name, sheet_name=sheet_name, header=1)
+    
+    # 2. Hapus baris & kolom yang benar-benar kosong
+    df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
+    
+    # 3. Bersihkan sisa-sisa nama 'Unnamed' jika masih ada
+    new_columns = []
+    for col in df.columns:
+        if "Unnamed" in str(col):
+            new_columns.append("") 
+        else:
+            new_columns.append(col)
+    df.columns = new_columns
+    
+    return df
 
 try:
     # Nama file harus sama persis dengan yang ada di GitHub
@@ -31,6 +49,7 @@ try:
 except Exception as e:
     st.error(f"Terjadi kesalahan: {e}")
     st.info("Pastikan file 'COMPONENT_RELIABILITY_DHC6-300.xlsm' sudah di-upload ke GitHub.")
+
 
 
 
