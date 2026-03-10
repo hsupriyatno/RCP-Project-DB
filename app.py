@@ -24,7 +24,8 @@ try:
     
     # Sidebar untuk pilih Sheet
     sheet_pilihan = st.sidebar.selectbox("Pilih Halaman (Sheet):", xls.sheet_names)
-    st.markdown(f"### 📊 Laporan: {sheet_pilihan}")
+    # Ganti baris st.markdown yang lama dengan ini:
+    st.markdown(f"### 📊 REPORT: TOP 10 HIGHEST REMOVAL RATE ({sheet_pilihan})")
     
     # Memuat data
     data = load_data(file_target, sheet_pilihan)
@@ -77,3 +78,4 @@ try:
 
 except Exception as e:
     st.error(f"Terjadi kesalahan: {e}")
+
