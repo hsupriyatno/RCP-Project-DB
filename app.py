@@ -111,7 +111,7 @@ try:
 
     event = st.dataframe(filtered, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
 
-    # 7. PART REMOVAL DETAIL
+# 7. PART REMOVAL DETAIL
     if event.selection.rows:
         selected_idx = event.selection.rows[0]
         row = filtered.iloc[selected_idx]
@@ -120,7 +120,7 @@ try:
         st.write("---")
         st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn_selected}")
         
-        # Rasio kolom 5:1:1 agar deskripsi panjang tidak terpotong
+        # Rasio kolom metrik tetap 5:1:1 agar deskripsi terlihat jelas
         m1, m2, m3 = st.columns([5, 1, 1])
         with m1:
             st.metric("Description", row.get('DESCRIPTION', 'N/A'))
@@ -142,16 +142,28 @@ try:
                     if 'DATE_STR' in hist_match.columns:
                         hist_match['DATE'] = hist_match['DATE_STR']
                     
-                    # Kolom REMARK telah dihapus dari daftar tampilan
+                    # Kolom REMARK tetap dihapus sesuai instruksi sebelumnya
                     potential_cols = ['DATE', 'REASON OF REMOVAL', 'TSN', 'TSO']
                     existing_cols = [c for c in potential_cols if c in hist_match.columns]
-                    st.dataframe(hist_match[existing_cols], use_container_width=True, hide_index=True)
+                    
+                    # Menerapkan perbandingan lebar kolom 1:5:1:1
+                    st.dataframe(
+                        hist_match[existing_cols], 
+                        use_container_width=True, 
+                        hide_index=True,
+                        column_config={
+                            "DATE": st.column_config.Column(width="small"),
+                            "REASON OF REMOVAL": st.column_config.Column(width="large"),
+                            "TSN": st.column_config.Column(width="small"),
+                            "TSO": st.column_config.Column(width="small")
+                        }
+                    )
                 else:
                     st.info(f"Tidak ada record removal untuk {pn_selected} pada {full_period}.")
-
 except Exception as e:
     st.error(f"Terjadi kesalahan sistem: {e}")
 
 st.sidebar.markdown("---")
 st.sidebar.info("Aviation Reliability Dashboard v1.2")
+
 
