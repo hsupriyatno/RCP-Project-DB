@@ -10,6 +10,11 @@ st.title("✈️ Reliability Dashboard DHC6-300")
 def load_data(file_name, sheet_name):
     # Membaca data dari Excel
     df = pd.read_excel(file_name, sheet_name=sheet_name)
+    
+    # MENGHAPUS KOLOM UNNAMED:
+    # Ini akan membuang semua kolom yang tidak ada judulnya di Excel
+    df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
+    
     # Menghapus baris/kolom yang benar-benar kosong
     df = df.dropna(how='all', axis=1).dropna(how='all', axis=0)
     return df
@@ -38,3 +43,4 @@ try:
 except Exception as e:
     st.error(f"Terjadi kesalahan: {e}")
     st.info("Pastikan file 'COMPONENT_RELIABILITY_DHC6-300.xlsm' sudah di-upload ke GitHub.")
+
