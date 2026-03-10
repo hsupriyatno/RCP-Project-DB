@@ -93,49 +93,51 @@ try:
     event = st.dataframe(filtered, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
 
     # 6. PART REMOVAL DETAIL (CUSTOM HTML UNTUK RATA KIRI TOTAL)
-# --- BAGIAN DETAIL YANG DIPERBAIKI (POINT 6) ---
+# --- BAGIAN DETAIL DAN HISTORY (POINT 6) ---
 if event.selection.rows:
     selected_idx = event.selection.rows[0]
     row = filtered.iloc[selected_idx]
     pn_selected = str(row['PART NUMBER']).strip()
     
     st.write("---")
-    # Judul Detail Rata Kiri
     st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn_selected}")
     
-    # Menggunakan HTML khusus untuk memaksa label dan nilai tetap di kiri
+    # Bagian Metric Rata Kiri
     c1, c2, c3 = st.columns([4, 1, 1])
-    
     with c1:
-        st.markdown(f"""
-            <div style='text-align: left;'>
-                <p style='margin-bottom: -5px; color: gray; font-size: 14px;'>Description</p>
-                <h2 style='margin-top: 0;'>{row.get('DESCRIPTION', 'N/A')}</h2>
-            </div>
-        """, unsafe_allow_html=True)
-    
+        st.markdown(f"<div style='text-align: left;'><p style='margin-bottom: -5px; color: gray; font-size: 14px;'>Description</p><h2 style='margin-top: 0;'>{row.get('DESCRIPTION', 'N/A')}</h2></div>", unsafe_allow_html=True)
     with c2:
-        st.markdown(f"""
-            <div style='text-align: left;'>
-                <p style='margin-bottom: -5px; color: gray; font-size: 14px;'>Current Rate</p>
-                <h2 style='margin-top: 0;'>{row.get('RATE', 0):.2f}</h2>
-            </div>
-        """, unsafe_allow_html=True)
-        
+        st.markdown(f"<div style='text-align: left;'><p style='margin-bottom: -5px; color: gray; font-size: 14px;'>Current Rate</p><h2 style='margin-top: 0;'>{row.get('RATE', 0):.2f}</h2></div>", unsafe_allow_html=True)
     with c3:
-        st.markdown(f"""
-            <div style='text-align: left;'>
-                <p style='margin-bottom: -5px; color: gray; font-size: 14px;'>Total Qty Rem</p>
-                <h2 style='margin-top: 0;'>{row.get('QTY REM', 0)} EA</h2>
-            </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"<div style='text-align: left;'><p style='margin-bottom: -5px; color: gray; font-size: 14px;'>Total Qty Rem</p><h2 style='margin-top: 0;'>{row.get('QTY REM', 0)} EA</h2></div>", unsafe_allow_html=True)
 
-    # Tabel History (Otomatis Rata Kiri)
+    # Tabel History dengan Paksaan Rata Kiri lewat CSS
     if not df_history.empty:
-        # ... (logika filter history tetap sama) ...
-        st.dataframe(hist_match[existing_cols], use_container_width=True, hide_index=True)                else:
-                    st.info(f"Tidak ada record removal untuk {pn_selected} pada {full_period}.")
+        col_pn_h = next((c for c in df_history.columns if 'PART' in c.upper()), None)
+        if col_pn_h:
+            hist_match = df_history[
+                (df_history[col_pn_h].astype(str).str.strip() == pn_selected) & 
+                (df_history['DATE'].dt.month == target_m) & 
+                (df_history['DATE'].dt.year == target_y)
+            ].copy()
+            
+            if not hist_match.empty:
+                potential_cols = ['DATE', 'REASON OF REMOVAL', 'TSN', 'TSO']
+                existing_cols = [c for c in potential_cols if c in hist_match.columns]
+                
+                # Injeksi CSS untuk memaksa tabel Streamlit rata kiri
+                st.markdown("""
+                    <style>
+                        [data-testid="stDataFrame"] div[data-testid="stTable"] th { text-align: left !important; }
+                        [data-testid="stDataFrame"] div[data-testid="stTable"] td { text-align: left !important; }
+                    </style>
+                """, unsafe_allow_html=True)
+                
+                st.dataframe(hist_match[existing_cols], use_container_width=True, hide_index=True)
+            else:
+                st.info(f"Tidak ada record removal untuk {pn_selected} pada {full_period}.")
 
 except Exception as e:
     st.error(f"Sistem Error: {e}")
+
 
