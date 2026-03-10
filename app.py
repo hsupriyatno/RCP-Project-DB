@@ -50,8 +50,8 @@ try:
     try:
         # Cek apakah kolom yang dibutuhkan ada di sheet ini
         # Sesuaikan 'PART NUMBER' dan 'RATE' dengan judul kolom di Excel Bapak
-# --- BAGIAN GRAFIK ---
-if 'PART NUMBER' in display_data.columns and 'RATE' in display_data.columns:
+        # --- BAGIAN GRAFIK ---
+        if 'PART NUMBER' in display_data.columns and 'RATE' in display_data.columns:
             # 1. Ambil 10 data teratas
             chart_data = display_data.head(10).copy()
             
@@ -85,6 +85,7 @@ if 'PART NUMBER' in display_data.columns and 'RATE' in display_data.columns:
 
 except Exception as e:
     st.error(f"Terjadi kesalahan: {e}")
+
 
 
 
