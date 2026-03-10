@@ -1,10 +1,3 @@
-Siap, Pak Hery! Pesan dimengerti. Legenda warna di samping chart (Colorbar) akan kita hilangkan sama sekali agar chart terlihat lebih bersih.
-
-Selain itu, warna batang (Bar) pada chart akan kita ganti dari gradasi merah menjadi warna kuning tua yang solid dan khas, sesuai identitas visual Airfast Indonesia.
-
-Berikut adalah kode app.py dengan penyesuaian visual tersebut:
-
-Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -166,3 +159,4 @@ try:
 
 except Exception as e:
     st.error(f"Critical System Error: {e}")
+
