@@ -57,30 +57,37 @@ try:
     )
 
     # --- LOGIKA DRILL-DOWN (Mencari ke sheet COMPONENT REPLACEMENT) ---
+# --- LOGIKA DRILL-DOWN (Sesuaikan nama kolom PART NUMBER OFF) ---
     if len(event.selection.rows) > 0:
         index_terpilih = event.selection.rows[0]
         row_data = display_data.iloc[index_terpilih]
-        pn_terpilih = str(row_data['PART NUMBER'])
+        pn_terpilih = str(row_data['PART NUMBER']).strip()
         
         st.markdown(f"### 🔍 Detailed History for P/N: {pn_terpilih}")
         with st.container(border=True):
-            col1, col2 = st.columns([1, 2])
-            with col1:
-                st.info(f"**Description:**\n\n{row_data['DESCRIPTION']}")
-                st.metric("Total Qty Removal", f"{row_data['QTY REM']} EA")
-            with col2:
-                st.markdown("**📅 Records found in 'COMPONENT REPLACEMENT':**")
-                # Filter data history berdasarkan P/N yang diklik
-                detail_pn = data_history[data_history['PART NUMBER'].astype(str) == pn_terpilih]
+            # Kita arahkan pencarian ke kolom 'PART NUMBER OFF'
+            col_target_history = 'PART NUMBER OFF'
+            
+            if col_target_history in data_history.columns:
+                # Filter data history berdasarkan P/N yang kita klik di tabel utama
+                detail_pn = data_history[data_history[col_target_history].astype(str).strip() == pn_terpilih]
                 
-                # Kolom yang ingin ditampilkan (Pastikan nama kolom sesuai dengan di Excel)
-                cols_to_show = ['DATE', 'REASON OF REMOVAL', 'REMARK', 'TSN', 'TSO']
-                available = [c for c in cols_to_show if c in detail_pn.columns]
-                
-                if not detail_pn.empty:
-                    st.table(detail_pn[available])
-                else:
-                    st.warning(f"Data P/N {pn_terpilih} tidak ditemukan di sheet COMPONENT REPLACEMENT.")
+                col1, col2 = st.columns([1, 2])
+                with col1:
+                    st.info(f"**Description:**\n\n{row_data['DESCRIPTION']}")
+                    st.metric("Total Qty Removal", f"{row_data['QTY REM']} EA")
+                with col2:
+                    st.markdown(f"**📅 Records found in 'COMPONENT REPLACEMENT' (as {col_target_history}):**")
+                    # Kolom yang ingin ditampilkan di tabel detail
+                    cols_to_show = ['DATE', 'REASON OF REMOVAL', 'REMARK', 'TSN', 'TSO']
+                    available = [c for c in cols_to_show if c in detail_pn.columns]
+                    
+                    if not detail_pn.empty:
+                        st.table(detail_pn[available])
+                    else:
+                        st.warning(f"P/N {pn_terpilih} tidak ditemukan history-nya di kolom {col_target_history}.")
+                    else:
+                        st.error(f"Kolom '{col_target_history}' tidak ditemukan di sheet COMPONENT REPLACEMENT. Silakan cek kembali nama kolomnya di Excel.")
 
     # --- BAGIAN GRAFIK ---
     st.markdown("---")
@@ -98,6 +105,7 @@ try:
 
 except Exception as e:
     st.error(f"Terjadi kesalahan struktur: {e}")
+
 
 
 
