@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from datetime import datetime, timedelta
 
 # 1. Konfigurasi Halaman
 st.set_page_config(page_title="Reliability Airfast DHC6-300", layout="wide")
@@ -10,117 +11,101 @@ st.title("✈️ Reliability Dashboard DHC6-300")
 @st.cache_data
 def load_filter_criteria(file_name):
     try:
-        # Membaca hanya 3 baris pertama dari kolom A di sheet target
         df_criteria = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None, nrows=3, usecols="A")
-        bulan = str(df_criteria.iloc[1, 0]).strip().upper() # Cell A2
-        tahun = str(df_criteria.iloc[2, 0]).strip()         # Cell A3
-        # Membersihkan format tahun jika terbaca sebagai float (misal 2025.0)
-        tahun = tahun.replace('.0', '')
-        return bulan, tahun
+        bulan_str = str(df_criteria.iloc[1, 0]).strip().upper() # Cell A2
+        tahun_str = str(df_criteria.iloc[2, 0]).strip().replace('.0', '') # Cell A3
+        return bulan_str, tahun_str
     except Exception as e:
-        st.error(f"Gagal membaca kriteria di A2/A3: {e}")
         return "N/A", "N/A"
 
-# 3. Fungsi Load Data Utama
+# 3. Fungsi Load Data Utama & History
 @st.cache_data
-def load_main_data(file_name, sheet_name):
+def load_all_data(file_name, sheet_pilihan):
     try:
-        # Header tabel dimulai dari baris ke-2 (index 1 di Python)
-        df = pd.read_excel(file_name, sheet_name=sheet_name, header=1)
-        df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
-        df.columns = [str(col).strip() for col in df.columns]
-        return df
-    except:
-        return pd.DataFrame()
-
-# 4. Fungsi Load History Removal
-@st.cache_data
-def load_history(file_name):
-    try:
+        df_utama = pd.read_excel(file_name, sheet_name=sheet_pilihan, header=1)
+        df_utama = df_utama.dropna(how='all', axis=0).dropna(how='all', axis=1)
+        df_utama.columns = [str(col).strip() for col in df_utama.columns]
+        
         df_hist = pd.read_excel(file_name, sheet_name="COMPONENT REPLACEMENT", header=0)
         df_hist.columns = [str(col).strip() for col in df_hist.columns]
         if 'DATE' in df_hist.columns:
             df_hist['DATE'] = pd.to_datetime(df_hist['DATE'], errors='coerce')
-        return df_hist
+        return df_utama, df_hist
     except:
-        return pd.DataFrame()
+        return pd.DataFrame(), pd.DataFrame()
 
 # --- EKSEKUSI DASHBOARD ---
 try:
     file_target = 'COMPONENT_RELIABILITY_DHC6-300.xlsm'
     
-    # Ambil Kriteria Global dari sheet REMOVAL RATE CALCULATION
-    target_month_name, target_year = load_filter_criteria(file_target)
+    # Ambil Kriteria dari Excel
+    bulan_excel, tahun_excel = load_filter_criteria(file_target)
     
-    # Sidebar
+    # Logic Pengurangan 1 Bulan
+    months_map = {
+        'JANUARY': 1, 'FEBRUARY': 2, 'MARCH': 3, 'APRIL': 4, 'MAY': 5, 'JUNE': 6,
+        'JULY': 7, 'AUGUST': 8, 'SEPTEMBER': 9, 'OCTOBER': 10, 'NOVEMBER': 11, 'DECEMBER': 12
+    }
+    
+    current_month_num = months_map.get(bulan_excel)
+    
+    if current_month_num and tahun_excel.isdigit():
+        # Buat objek tanggal berdasarkan input Excel
+        current_date = datetime(int(tahun_excel), current_month_num, 1)
+        # Kurangi 1 bulan menggunakan timedelta (mundur ke hari terakhir bulan sebelumnya)
+        previous_date = current_date - timedelta(days=1)
+        
+        target_month_num = previous_date.month
+        target_year_val = previous_date.year
+        # Cari nama bulan untuk tampilan UI
+        target_month_name = [k for k, v in months_map.items() if v == target_month_num][0]
+    else:
+        target_month_num, target_year_val, target_month_name = None, None, "N/A"
+
+    # Sidebar & Data Load
     xls = pd.ExcelFile(file_target)
-    sheet_pilihan = st.sidebar.selectbox("Pilih Sheet Laporan:", xls.sheet_names)
-    
-    st.sidebar.markdown("---")
-    st.sidebar.info(f"📅 **Periode Laporan:**\n{target_month_name} {target_year}")
+    sheet_pilihan = st.sidebar.selectbox("Pilih Sheet:", ["REMOVAL RATE CALCULATION", "ALERT LEVEL CALCULATION"])
+    data_utama, data_history = load_all_data(file_target, sheet_pilihan)
 
-    # Load Data
-    data_utama = load_main_data(file_target, sheet_pilihan)
-    data_history = load_history(file_target)
+    st.sidebar.info(f"📌 **Excel Status:** {bulan_excel} {tahun_excel}\n\n🔍 **Displaying Data:** {target_month_name} {target_year_val}")
 
-    # Input Pencarian
+    # Tabel Utama
     search = st.text_input("🔍 Cari Part Number / Description:")
     if search:
         data_utama = data_utama[data_utama.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)]
 
-    # Tabel Utama
-    st.markdown(f"### 📊 Data: {sheet_pilihan}")
     event = st.dataframe(data_utama, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
 
-    # --- LOGIKA DETAIL HISTORY DENGAN FILTER TANGGAL ---
+    # --- DETAIL HISTORY DENGAN FILTER PREVIOUS MONTH ---
     if event.selection.rows:
         idx = event.selection.rows[0]
         row = data_utama.iloc[idx]
-        pn_terpilih = str(row['PART NUMBER']).strip()
+        pn = str(row['PART NUMBER']).strip()
         
-        st.markdown(f"### 🔍 Detailed History for P/N: {pn_terpilih}")
-        
+        st.markdown(f"### 🔍 Detailed History for P/N: {pn}")
         with st.container(border=True):
             col1, col2 = st.columns([1, 2])
             with col1:
-                st.info(f"**Description:**\n\n{row.get('DESCRIPTION', 'N/A')}")
-                st.metric("Total Qty Rem", f"{row.get('QTY REM', 0)} EA")
+                st.info(f"**Description:**\n{row.get('DESCRIPTION', 'N/A')}")
+                st.metric(f"Total Qty Removal ({target_month_name})", f"{row.get('QTY REM', 0)} EA")
             
             with col2:
-                # Filter Data History berdasarkan P/N dan Periode dari A2/A3
-                if not data_history.empty and 'PART NUMBER OFF' in data_history.columns:
-                    # 1. Filter P/N
-                    detail = data_history[data_history['PART NUMBER OFF'].astype(str).str.strip() == pn_terpilih].copy()
+                st.markdown(f"**📅 Removal Records in {target_month_name} {target_year_val}:**")
+                if not data_history.empty and target_month_num:
+                    # Filter P/N DAN Filter Bulan Sebelumnya
+                    detail = data_history[
+                        (data_history['PART NUMBER OFF'].astype(str).str.strip() == pn) &
+                        (data_history['DATE'].dt.month == target_month_num) &
+                        (data_history['DATE'].dt.year == target_year_val)
+                    ]
                     
-                    # 2. Mapping Nama Bulan ke Angka
-                    months_map = {
-                        'JANUARY': 1, 'FEBRUARY': 2, 'MARCH': 3, 'APRIL': 4, 'MAY': 5, 'JUNE': 6,
-                        'JULY': 7, 'AUGUST': 8, 'SEPTEMBER': 9, 'OCTOBER': 10, 'NOVEMBER': 11, 'DECEMBER': 12
-                    }
-                    target_month_num = months_map.get(target_month_name)
+                    show_cols = ['DATE', 'REASON OF REMOVAL', 'REMARK', 'TSN', 'TSO']
+                    valid = [c for c in show_cols if c in detail.columns]
                     
-                    # 3. Filter Tanggal
-                    if target_month_num and target_year.isdigit():
-                        detail = detail[
-                            (detail['DATE'].dt.month == target_month_num) & 
-                            (detail['DATE'].dt.year == int(target_year))
-                        ]
-                        
-                        show_cols = ['DATE', 'REASON OF REMOVAL', 'REMARK', 'TSN', 'TSO']
-                        cols_available = [c for c in show_cols if c in detail.columns]
-                        
-                        if not detail.empty:
-                            st.table(detail[cols_available])
-                        else:
-                            st.warning(f"Tidak ditemukan data removal pada {target_month_name} {target_year}.")
+                    if not detail.empty:
+                        st.table(detail[valid])
                     else:
-                        st.error(f"Kriteria filter tidak valid: {target_month_name} / {target_year}")
-
-    # Grafik Top 10
-    st.markdown("---")
-    if 'PART NUMBER' in data_utama.columns and 'RATE' in data_utama.columns:
-        fig = px.bar(data_utama.head(10), x='PART NUMBER', y='RATE', title="Top 10 Part Removal Rate", color='RATE', color_continuous_scale='Reds')
-        st.plotly_chart(fig, use_container_width=True)
+                        st.warning(f"Tidak ada removal pada bulan {target_month_name} {target_year_val}.")
 
 except Exception as e:
-    st.error(f"Sistem mengalami kendala: {e}")
+    st.error(f"Error: {e}")
