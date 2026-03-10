@@ -147,7 +147,7 @@ try:
         # Menggunakan .get() untuk keamanan data jika kolom kosong
         m1.metric("Description", row.get('DESCRIPTION', 'N/A'))
         m2.metric("Current Rate", f"{row.get('RATE', 0):.2f}")
-        m3.metric("Total Qty Rem", f"{row.get('QTY REM', 0)} EA")
+        m3.metric("Total Qty Removed", f"{row.get('QTY REM', 0)} EA")
 
         # Tabel history tetap di bawah dengan format dd-mm-yyyy dan tanpa indeks
         if not df_history.empty:
@@ -178,6 +178,7 @@ except Exception as e:
 # Footer
 st.sidebar.markdown("---")
 st.sidebar.info("Aviation Reliability Dashboard v1.2")
+
 
 
 
