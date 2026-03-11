@@ -1,10 +1,15 @@
+Waduh, sepertinya ada masalah spasi (IndentationError) saat proses copy-paste tadi, Pak Hery. Di Python, spasi di awal baris sangat sensitif.
+
+Berikut adalah kode v4.2 yang sudah saya rapikan total strukturnya agar tidak ada lagi error spasi dan tabel UPTREND tetap muncul meski datanya kosong.
+
+Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
-# 1. KONFIGURASI HALAMAN (DIPERBAIKI AGAR TIDAK ATTRIBUTE ERROR)
+# 1. KONFIGURASI HALAMAN
 st.set_page_config(page_title="Reliability Dashboard | Airfast Indonesia", layout="wide")
 
 # 2. FUNGSI LOAD DATA
@@ -19,15 +24,14 @@ def load_all_data(file_name):
                  'JULY':7,'AUGUST':8,'SEPTEMBER':9,'OCTOBER':10,'NOVEMBER':11,'DECEMBER':12}
         ref_month_idx = m_map.get(ref_month_str, 1)
 
-        # B. LOGIKA N-1 (BULAN ANALISIS)
+        # B. LOGIKA N-1
         input_date = datetime(ref_year_int, ref_month_idx, 1)
         target_date = input_date - relativedelta(months=1)
-        
         c_month_name = target_date.strftime('%B').upper()
         c_year_int = target_date.year
         c_month_idx = target_date.month
 
-        # C. LOAD SHEET REMOVAL RATE CALCULATION (SUMBER UTAMA)
+        # C. LOAD SHEET REMOVAL RATE CALCULATION
         df_raw = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None)
         h_idx = 0
         for i, row in df_raw.iterrows():
@@ -38,13 +42,12 @@ def load_all_data(file_name):
         df_main = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=h_idx)
         df_main.columns = [str(c).strip().upper() for c in df_main.columns]
         
-        # PROSES KOLOM RATE SECARA MANDIRI (I=8, L=11, O=14)
         df_main['RATE_3MO'] = pd.to_numeric(df_main.iloc[:, 8], errors='coerce').fillna(0)
         df_main['RATE_2MO'] = pd.to_numeric(df_main.iloc[:, 11], errors='coerce').fillna(0)
         df_main['RATE_1MO'] = pd.to_numeric(df_main.iloc[:, 14], errors='coerce').fillna(0)
         df_main['PN_DESC_CHART'] = df_main['PART NUMBER'].astype(str) + "<br>" + df_main['DESCRIPTION'].astype(str).str[:25]
         
-        # D. LOAD SHEET COMPONENT REPLACEMENT (HANYA UNTUK DETAIL HISTORY)
+        # D. LOAD SHEET COMPONENT REPLACEMENT
         df_hist = pd.read_excel(file_name, sheet_name="COMPONENT REPLACEMENT")
         df_hist.columns = [str(c).strip().upper() for c in df_hist.columns]
         date_col = next((c for c in df_hist.columns if 'DATE' in c), None)
@@ -74,11 +77,9 @@ if 'data_refresh' not in st.session_state or st.sidebar.button("🔄 Sync with E
 
 if 'data_refresh' in st.session_state:
     st.title("📊 Reliability Analysis Dashboard")
-    
-    # 3. HEADER INFORMASI (KONSISTEN)
     st.info(f"📅 **Current Period (A2/A3):** {st.session_state.p_m} {st.session_state.p_y}")
     
-    # 4. CHART TOP 10
+    # TOP 10 CHART
     st.subheader(f"📈 Top 10 Removal Rate ({st.session_state.c_m})")
     top_10 = st.session_state.df_m.sort_values(by='RATE_1MO', ascending=False).head(10).copy()
     fig = px.bar(top_10, x='PN_DESC_CHART', y='RATE_1MO', text_auto='.2f')
@@ -88,7 +89,7 @@ if 'data_refresh' in st.session_state:
 
     st.divider()
 
-    # 5. DATA TABLE SUMMARY
+    # SUMMARY TABLE
     with st.expander("🔍 Click to View Top 10 Data Table Summary", expanded=False):
         sel_event = st.dataframe(
             top_10[['PART NUMBER', 'DESCRIPTION', 'RATE_1MO']], 
@@ -96,7 +97,7 @@ if 'data_refresh' in st.session_state:
             on_select="rerun", selection_mode="single-row"
         )
 
-    # 6. PART REMOVAL DETAIL (MENGGUNAKAN N-1 FILTER)
+    # PART REMOVAL DETAIL
     if sel_event.selection.rows:
         sel_row = top_10.iloc[sel_event.selection.rows[0]]
         pn_sel = str(sel_row['PART NUMBER']).strip()
@@ -108,7 +109,7 @@ if 'data_refresh' in st.session_state:
             (st.session_state.df_h['DATE_DT'].dt.year == st.session_state.c_y)
         ].copy().sort_values(by='DATE_DT', ascending=False)
 
-        st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn_sel}") #
+        st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn_sel}")
         
         m1, m2, m3 = st.columns([3,1,1])
         m1.metric("Description", sel_row['DESCRIPTION'])
@@ -121,49 +122,40 @@ if 'data_refresh' in st.session_state:
         else:
             st.info(f"Tidak ditemukan catatan pelepasan untuk {pn_sel} pada periode {st.session_state.c_m}.")
 
-st.divider()
+    st.divider()
 
-    # 7. UPTREND PART REMOVAL (MODIFIKASI TAMPILAN KOSONG)
+    # UPTREND PART REMOVAL (DIKUNCI AGAR TETAP TAMPIL)
     st.subheader("⚠️ UPTREND PART REMOVAL (3-Month Continuous Increase)")
     
-    # Logika Filter Uptrend: O > L > I dan I > 0
     uptrend_df = st.session_state.df_m[
         (st.session_state.df_m['RATE_1MO'] > st.session_state.df_m['RATE_2MO']) & 
         (st.session_state.df_m['RATE_2MO'] > st.session_state.df_m['RATE_3MO']) & 
         (st.session_state.df_m['RATE_3MO'] > 0)
     ].copy()
 
-    # TAMPILKAN HEADER TABEL TETAP ADA
     cols_to_show = ['PART NUMBER', 'DESCRIPTION', 'RATE_3MO', 'RATE_2MO', 'RATE_1MO']
     
     if not uptrend_df.empty:
-        st.warning(f"Terdeteksi {len(uptrend_df)} komponen dengan tren kenaikan removal rate.")
+        st.warning(f"Terdeteksi {len(uptrend_df)} komponen dengan tren kenaikan.")
         display_df = uptrend_df[cols_to_show]
     else:
-        # JIKA KOSONG: BUAT DATAFRAME BARU DENGAN 1 BARIS BERISI KETERANGAN
         st.success(f"✅ Tidak ada uptrend removal rate pada periode analisis {st.session_state.c_m} {st.session_state.c_y}.")
+        # Baris keterangan jika kosong
         empty_data = {
             'PART NUMBER': ['-'],
             'DESCRIPTION': [f'No Uptrend detected in the last 3 months ({st.session_state.c_m})'],
-            'RATE_3MO': [0.0],
-            'RATE_2MO': [0.0],
-            'RATE_1MO': [0.0]
+            'RATE_3MO': [0.0], 'RATE_2MO': [0.0], 'RATE_1MO': [0.0]
         }
         display_df = pd.DataFrame(empty_data)
 
-    # TAMPILKAN TABEL (BAIK ADA DATA MAUPUN KOSONG)
     st.dataframe(
         display_df, 
-        use_container_width=True, 
-        hide_index=True,
+        use_container_width=True, hide_index=True,
         column_config={
             "RATE_3MO": "RATE PREVIOUS 3 MO (I)", 
             "RATE_2MO": "RATE PREVIOUS 2 MO (L)", 
             "RATE_1MO": "RATE PREVIOUS 1 MO (O)"
         }
     )
-    else:
-        st.success(f"✅ Tidak ada uptrend removal rate pada periode analisis {st.session_state.c_m} {st.session_state.c_y}.")
 
 st.sidebar.info(f"User: HERY SUPRIYATNO\nReliability Engineer")
-
