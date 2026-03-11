@@ -33,16 +33,14 @@ def get_period_labels(bulan_str, tahun_str):
     except:
         return f"{bulan_str} {tahun_str}", "N/A", 1, 2026
 
-# 3. FUNGSI LOAD DATA (RELIABILITY & HISTORY)
+# 3. FUNGSI LOAD DATA
 @st.cache_data
 def load_all_data(file_name):
     try:
-        # Ambil info periode
         df_info = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None, nrows=3, usecols="A")
         bln_raw = str(df_info.iloc[1, 0]).strip()
         thn_raw = str(df_info.iloc[2, 0]).strip().replace('.0', '')
         
-        # Load Sheet Utama
         df_raw = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None)
         h_idx = 0
         for i, row in df_raw.iterrows():
@@ -52,18 +50,14 @@ def load_all_data(file_name):
         df_main = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=h_idx)
         df_main.columns = [str(c).strip().upper() for c in df_main.columns]
         
-        # Mapping Kolom Rate & Qty
         df_main['RATE_3MO'] = pd.to_numeric(df_main.iloc[:, 8], errors='coerce').fillna(0)
         df_main['RATE_2MO'] = pd.to_numeric(df_main.iloc[:, 11], errors='coerce').fillna(0)
         df_main['RATE_1MO'] = pd.to_numeric(df_main.iloc[:, 14], errors='coerce').fillna(0)
         df_main['QTY_VAL'] = pd.to_numeric(df_main.iloc[:, 13], errors='coerce').fillna(0)
-        df_main['PN_DESC'] = df_main['PART NUMBER'].astype(str) + "<br>" + df_main['DESCRIPTION'].astype(str).str[:25]
+        df_main['PN_DESC_CHART'] = df_main['PART NUMBER'].astype(str) + "<br>" + df_main['DESCRIPTION'].astype(str).str[:25]
         
-        # Load Sheet History (COMPONENT REPLACEMENT)
         df_hist = pd.read_excel(file_name, sheet_name="COMPONENT REPLACEMENT")
         df_hist.columns = [str(c).strip().upper() for c in df_hist.columns]
-        
-        # Cari kolom Date secara fleksibel
         date_col = next((c for c in df_hist.columns if 'DATE' in c), None)
         if date_col:
             df_hist['DATE_DT'] = pd.to_datetime(df_hist[date_col], errors='coerce')
@@ -89,10 +83,21 @@ try:
         # 4. CHART TOP 10
         st.subheader("📈 Top 10 Removal Rate (Current Month)")
         top_10 = df_main.sort_values(by='RATE_1MO', ascending=False).head(10).copy()
-        fig = px.bar(top_10, x='PN_DESC', y='RATE_1MO', text_auto='.2f')
+        fig = px.bar(top_10, x='PN_DESC_CHART', y='RATE_1MO', text_auto='.2f')
         fig.update_traces(marker_color='#F2B200', width=0.4) 
         fig.update_layout(dragmode=False, xaxis_tickangle=-45, margin=dict(b=100), xaxis_title=None)
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+
+        # --- FITUR UTAMA: SELECTION DARI TOP 10 TABLE ---
+        with st.expander("📊 Click to View Top 10 Data Table Summary", expanded=False):
+            event_top10 = st.dataframe(
+                top_10[['PART NUMBER', 'DESCRIPTION', 'QTY_VAL', 'RATE_1MO']], 
+                use_container_width=True, hide_index=True,
+                on_select="rerun", selection_mode="single-row",
+                column_config={"QTY_VAL": "QTY REM", "RATE_1MO": "RATE"}
+            )
+
+        st.divider()
 
         # 5. COMPONENT EXPLORER
         st.subheader("🔍 Component Explorer")
@@ -102,32 +107,35 @@ try:
             mask = df_main.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)
             filtered = df_main[mask]
 
-        event = st.dataframe(
+        event_explorer = st.dataframe(
             filtered[['PART NUMBER', 'DESCRIPTION', 'RATE_1MO']], 
             use_container_width=True, hide_index=True, 
             on_select="rerun", selection_mode="single-row"
         )
 
-        # 6. PART REMOVAL DETAIL & HISTORY (FITUR KEMBALI)
-        if event.selection.rows:
-            sel = filtered.iloc[event.selection.rows[0]]
-            pn_selected = str(sel['PART NUMBER']).strip()
+        # 6. LOGIKA PENAMPILAN DETAIL & HISTORY (DARI KEDUA TABEL)
+        sel_row = None
+        # Cek jika ada pilihan dari Top 10 Table
+        if event_top10.selection.rows:
+            sel_row = top_10.iloc[event_top10.selection.rows[0]]
+        # Cek jika ada pilihan dari Explorer (ini akan menimpa pilihan Top 10 jika keduanya diklik)
+        elif event_explorer.selection.rows:
+            sel_row = filtered.iloc[event_explorer.selection.rows[0]]
+
+        if sel_row is not None:
+            pn_selected = str(sel_row['PART NUMBER']).strip()
             st.write("---")
             st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn_selected}")
             
             c1, c2, c3 = st.columns([4, 1, 1])
-            c1.metric("Description", sel.get('DESCRIPTION', 'N/A'))
-            c2.metric("Current Rate", f"{sel['RATE_1MO']:.2f}")
-            c3.metric("Total Qty Rem", f"{int(sel['QTY_VAL'])} EA")
+            c1.metric("Description", sel_row.get('DESCRIPTION', 'N/A'))
+            c2.metric("Current Rate", f"{sel_row['RATE_1MO']:.2f}")
+            c3.metric("Total Qty Rem", f"{int(sel_row['QTY_VAL'])} EA")
             
-            # --- TABEL PART REMOVAL HISTORY ---
             st.write(f"**Part Removal History ({analysis_txt}):**")
             
             if not df_history.empty:
-                # Cari kolom PN di history
                 pn_col_h = next((c for c in df_history.columns if 'PART' in c), df_history.columns[1])
-                
-                # Filter berdasarkan PN dan Bulan Analisis
                 hist_match = df_history[
                     (df_history[pn_col_h].astype(str).str.strip() == pn_selected) & 
                     (df_history['DATE_DT'].dt.month == m_idx) & 
@@ -135,16 +143,9 @@ try:
                 ].copy()
                 
                 if not hist_match.empty:
-                    # Menampilkan kolom sesuai permintaan Bapak
-                    cols_to_show = []
-                    for c in ['DATE_DISPLAY', 'REASON OF REMOVAL', 'TSN', 'TSO']:
-                        if c in hist_match.columns or c == 'DATE_DISPLAY':
-                            cols_to_show.append(c)
-                    
                     st.dataframe(
-                        hist_match[cols_to_show], 
-                        use_container_width=True, 
-                        hide_index=True,
+                        hist_match[['DATE_DISPLAY', 'REASON OF REMOVAL', 'TSN', 'TSO']], 
+                        use_container_width=True, hide_index=True,
                         column_config={"DATE_DISPLAY": "DATE"}
                     )
                 else:
@@ -153,7 +154,7 @@ try:
         st.divider()
 
         # 7. UPTREND PART REMOVAL
-        st.subheader("⚠️ UPTREND PART REMOVAL (3-Month Increase)")
+        st.subheader("⚠️ UPTREND PART REMOVAL (3-Month Continuous Increase)")
         uptrend = df_main[(df_main['RATE_3MO'] > 0) & (df_main['RATE_2MO'] > df_main['RATE_3MO']) & (df_main['RATE_1MO'] > df_main['RATE_2MO'])].copy()
         if not uptrend.empty:
             st.warning(f"Terdeteksi {len(uptrend)} komponen dengan tren kenaikan.")
