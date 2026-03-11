@@ -1,10 +1,3 @@
-Siap, Pak Hery. Component Explorer sudah saya hapus sesuai instruksi Bapak.
-
-Sekarang tampilan dashboard menjadi lebih ringkas dan fokus pada alur: Chart -> Top 10 Table -> Part Removal Detail & History.
-
-Berikut adalah kode v2.6 yang telah diperbarui:
-
-Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -151,3 +144,4 @@ except Exception as e:
     st.error(f"Sistem Error: {e}")
 
 st.sidebar.info(f"User: HERY SUPRIYATNO\nReliability Engineer")
+
