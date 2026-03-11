@@ -1,3 +1,10 @@
+Siap, Pak Hery. Component Explorer sudah saya hapus sesuai instruksi Bapak.
+
+Sekarang tampilan dashboard menjadi lebih ringkas dan fokus pada alur: Chart -> Top 10 Table -> Part Removal Detail & History.
+
+Berikut adalah kode v2.6 yang telah diperbarui:
+
+Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -97,28 +104,11 @@ try:
                 column_config={"QTY_VAL": "QTY REM", "RATE_1MO": "RATE"}
             )
 
-        # ---------------------------------------------------------
-        # 6. BAGIAN DETAIL & HISTORY (POSISI PERSIS DI BAWAH TABEL ATAS)
-        # ---------------------------------------------------------
-        
-        # Penampung pilihan (Selection)
-        sel_row = None
-        # Penampung sementara untuk event explorer (didefinisikan nanti)
-        # Namun kita butuh variabel flag agar detail muncul di sini
-        
-        # Kita perlu mendefinisikan Explorer di bawah, tapi agar Detail muncul di SINI, 
-        # kita biarkan Streamlit melakukan rerun saat explorer diklik.
-        
-        # Deteksi pilihan dari Top 10 (Variabel ini sudah ada di atas)
+        # 6. PART REMOVAL DETAIL & HISTORY (DI BAWAH TABEL TOP 10)
         if event_top10.selection.rows:
             sel_row = top_10.iloc[event_top10.selection.rows[0]]
-
-        # Note: Karena event_explorer didefinisikan SETELAH ini, 
-        # kita butuh trik session_state jika ingin pilihan dari explorer juga muncul di sini.
-        # Untuk saat ini, mari kita prioritaskan permintaan utama Bapak: Detail di bawah Tabel Top 10.
-        
-        if sel_row is not None:
             pn_selected = str(sel_row['PART NUMBER']).strip()
+            
             st.write("---")
             st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn_selected}")
             
@@ -148,24 +138,7 @@ try:
         
         st.divider()
 
-        # 7. COMPONENT EXPLORER (PENEMPATAN DI BAWAH DETAIL)
-        st.subheader("🔍 Component Explorer")
-        search = st.text_input("Cari Part Number atau Deskripsi:")
-        filtered = df_main.copy()
-        if search:
-            mask = df_main.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)
-            filtered = df_main[mask]
-
-        # Jika Bapak ingin explorer juga memicu detail di ATAS, kita bisa gunakan session_state, 
-        # tapi untuk v2.5 ini saya fokuskan ke urutan visual yang Bapak minta.
-        st.dataframe(
-            filtered[['PART NUMBER', 'DESCRIPTION', 'RATE_1MO']], 
-            use_container_width=True, hide_index=True
-        )
-
-        st.divider()
-
-        # 8. UPTREND PART REMOVAL
+        # 7. UPTREND PART REMOVAL
         st.subheader("⚠️ UPTREND PART REMOVAL (3-Month Continuous Increase)")
         uptrend = df_main[(df_main['RATE_3MO'] > 0) & (df_main['RATE_2MO'] > df_main['RATE_3MO']) & (df_main['RATE_1MO'] > df_main['RATE_2MO'])].copy()
         if not uptrend.empty:
