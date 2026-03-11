@@ -48,7 +48,6 @@ def load_all_data(file_name):
         df_main = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=h_idx)
         df_main.columns = [str(c).strip().upper() for c in df_main.columns]
         
-        # Mapping Data Historis (Kolom I, L, O)
         df_main['RATE_3MO'] = pd.to_numeric(df_main.iloc[:, 8], errors='coerce').fillna(0)
         df_main['RATE_2MO'] = pd.to_numeric(df_main.iloc[:, 11], errors='coerce').fillna(0)
         df_main['RATE_1MO'] = pd.to_numeric(df_main.iloc[:, 14], errors='coerce').fillna(0)
@@ -94,17 +93,22 @@ try:
                 on_select="rerun", selection_mode="single-row"
             )
 
-        # 6. PART REMOVAL DETAIL & HISTORY
+        # 6. PART REMOVAL DETAIL & HISTORY (DENGAN SORT DESCENDING)
         if event_top10.selection.rows:
             sel_row = top_10.iloc[event_top10.selection.rows[0]]
             pn_selected = str(sel_row['PART NUMBER']).strip()
             
             pn_col_h = next((c for c in df_history.columns if 'PART' in c), df_history.columns[1])
+            
+            # Filter data
             hist_match = df_history[
                 (df_history[pn_col_h].astype(str).str.strip() == pn_selected) & 
                 (df_history['DATE_DT'].dt.month == m_idx) & 
                 (df_history['DATE_DT'].dt.year == y_idx)
             ].copy()
+            
+            # URUTKAN BERDASARKAN TANGGAL DESCENDING (Terbaru ke Terlama)
+            hist_match = hist_match.sort_values(by='DATE_DT', ascending=False)
             
             qty_per_month = len(hist_match)
 
@@ -129,26 +133,21 @@ try:
         
         st.divider()
 
-        # 7. UPTREND PART REMOVAL (HEADER DIPERBARUI)
+        # 7. UPTREND PART REMOVAL
         st.subheader("⚠️ UPTREND PART REMOVAL (3-Month Continuous Increase)")
-        
         uptrend = df_main[
             (df_main['RATE_1MO'] > df_main['RATE_2MO']) & 
             (df_main['RATE_2MO'] > df_main['RATE_3MO']) & 
             (df_main['RATE_3MO'] > 0)
         ].copy()
 
-        # Menyiapkan kolom dengan nama baru
-        uptrend_display = uptrend[['PART NUMBER', 'DESCRIPTION', 'RATE_3MO', 'RATE_2MO', 'RATE_1MO']].copy()
-
         if not uptrend.empty:
             st.warning(f"Terdeteksi {len(uptrend)} komponen dengan tren kenaikan terus-menerus.")
         else:
             st.success("✅ Tidak ada uptrend removal rate dalam 3 bulan terakhir.")
 
-        # Tabel akan selalu tampil dengan header baru
         st.dataframe(
-            uptrend_display, 
+            uptrend[['PART NUMBER', 'DESCRIPTION', 'RATE_3MO', 'RATE_2MO', 'RATE_1MO']], 
             use_container_width=True, hide_index=True,
             column_config={
                 "RATE_3MO": "RATE PREV. 3MO",
