@@ -1,14 +1,3 @@
-Siap, Pak Hery. Saya tangkap poinnya:
-
-Batang Grafik: Dirampingkan agar tidak terlalu lebar.
-
-Sumbu X: Menampilkan kombinasi Part Number dan Description agar informasinya lengkap dalam sekali lihat.
-
-Fix Error: Memastikan tidak ada lagi error merah 'DATE' yang mengganggu.
-
-Berikut adalah kode v2.1 yang sudah diperbarui:
-
-Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -172,3 +161,4 @@ except Exception as e:
     st.error(f"Sistem Error: {e}")
 
 st.sidebar.info(f"User: HERY SUPRIYATNO\nAviation Reliability Engineer")
+
