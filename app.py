@@ -1,8 +1,3 @@
-Waduh, sepertinya ada masalah spasi (IndentationError) saat proses copy-paste tadi, Pak Hery. Di Python, spasi di awal baris sangat sensitif.
-
-Berikut adalah kode v4.2 yang sudah saya rapikan total strukturnya agar tidak ada lagi error spasi dan tabel UPTREND tetap muncul meski datanya kosong.
-
-Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -159,3 +154,4 @@ if 'data_refresh' in st.session_state:
     )
 
 st.sidebar.info(f"User: HERY SUPRIYATNO\nReliability Engineer")
+
