@@ -1,10 +1,3 @@
-Siap, Pak Hery. Saya mengerti, tabel UPTREND PART REMOVAL ini sangat krusial sebagai sistem early warning bagi engineer untuk mendeteksi komponen yang degradasi kinerjanya terus menurun dalam 3 bulan terakhir.
-
-Sesuai permintaan Bapak, saya sudah menambahkan kembali tabel tersebut di posisi paling bawah dengan logika filter: Rate O > Rate L > Rate I (dan semuanya harus di atas 0).
-
-Berikut adalah kode v3.8 yang sudah lengkap:
-
-Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -155,3 +148,4 @@ if 'data_refresh' in st.session_state:
     )
 
 st.sidebar.info(f"User: HERY SUPRIYATNO\nReliability Engineer")
+
