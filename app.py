@@ -121,32 +121,49 @@ if 'data_refresh' in st.session_state:
         else:
             st.info(f"Tidak ditemukan catatan pelepasan untuk {pn_sel} pada periode {st.session_state.c_m}.")
 
-    st.divider()
+st.divider()
 
-    # 7. UPTREND PART REMOVAL (HANYA MENGOLAH DATA DARI SHEET REMOVAL RATE CALCULATION)
+    # 7. UPTREND PART REMOVAL (MODIFIKASI TAMPILAN KOSONG)
     st.subheader("⚠️ UPTREND PART REMOVAL (3-Month Continuous Increase)")
     
-    # Logika Filter Uptrend: Rate O > Rate L > Rate I (Abaikan Rate 0)
-    # Diproses langsung dari dataframe sheet utama (df_m)
+    # Logika Filter Uptrend: O > L > I dan I > 0
     uptrend_df = st.session_state.df_m[
         (st.session_state.df_m['RATE_1MO'] > st.session_state.df_m['RATE_2MO']) & 
         (st.session_state.df_m['RATE_2MO'] > st.session_state.df_m['RATE_3MO']) & 
         (st.session_state.df_m['RATE_3MO'] > 0)
     ].copy()
 
+    # TAMPILKAN HEADER TABEL TETAP ADA
+    cols_to_show = ['PART NUMBER', 'DESCRIPTION', 'RATE_3MO', 'RATE_2MO', 'RATE_1MO']
+    
     if not uptrend_df.empty:
-        st.warning(f"Terdeteksi {len(uptrend_df)} komponen yang mengalami kenaikan removal rate berturut-turut.")
-        st.dataframe(
-            uptrend_df[['PART NUMBER', 'DESCRIPTION', 'RATE_3MO', 'RATE_2MO', 'RATE_1MO']], 
-            use_container_width=True, 
-            hide_index=True,
-            column_config={
-                "RATE_3MO": "RATE PREVIOUS 3 MO (I)", 
-                "RATE_2MO": "RATE PREVIOUS 2 MO (L)", 
-                "RATE_1MO": "RATE PREVIOUS 1 MO (O)"
-            }
-        )
+        st.warning(f"Terdeteksi {len(uptrend_df)} komponen dengan tren kenaikan removal rate.")
+        display_df = uptrend_df[cols_to_show]
+    else:
+        # JIKA KOSONG: BUAT DATAFRAME BARU DENGAN 1 BARIS BERISI KETERANGAN
+        st.success(f"✅ Tidak ada uptrend removal rate pada periode analisis {st.session_state.c_m} {st.session_state.c_y}.")
+        empty_data = {
+            'PART NUMBER': ['-'],
+            'DESCRIPTION': [f'No Uptrend detected in the last 3 months ({st.session_state.c_m})'],
+            'RATE_3MO': [0.0],
+            'RATE_2MO': [0.0],
+            'RATE_1MO': [0.0]
+        }
+        display_df = pd.DataFrame(empty_data)
+
+    # TAMPILKAN TABEL (BAIK ADA DATA MAUPUN KOSONG)
+    st.dataframe(
+        display_df, 
+        use_container_width=True, 
+        hide_index=True,
+        column_config={
+            "RATE_3MO": "RATE PREVIOUS 3 MO (I)", 
+            "RATE_2MO": "RATE PREVIOUS 2 MO (L)", 
+            "RATE_1MO": "RATE PREVIOUS 1 MO (O)"
+        }
+    )
     else:
         st.success(f"✅ Tidak ada uptrend removal rate pada periode analisis {st.session_state.c_m} {st.session_state.c_y}.")
 
 st.sidebar.info(f"User: HERY SUPRIYATNO\nReliability Engineer")
+
