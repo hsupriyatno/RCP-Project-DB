@@ -88,7 +88,8 @@ try:
         fig.update_layout(dragmode=False, xaxis_tickangle=-45, margin=dict(b=100), xaxis_title=None)
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-        # --- FITUR UTAMA: SELECTION DARI TOP 10 TABLE ---
+        # 5. TOP 10 DATA TABLE (DI ATAS EXPLORER)
+        # Sesuai permintaan, ini ditempatkan sebelum Component Explorer
         with st.expander("📊 Click to View Top 10 Data Table Summary", expanded=False):
             event_top10 = st.dataframe(
                 top_10[['PART NUMBER', 'DESCRIPTION', 'QTY_VAL', 'RATE_1MO']], 
@@ -97,9 +98,11 @@ try:
                 column_config={"QTY_VAL": "QTY REM", "RATE_1MO": "RATE"}
             )
 
+        # 6. PENAMPILAN DETAIL & HISTORY (DI ANTARA KEDUA TABEL)
+        # Menampilkan Component Explorer di bawah, tapi Detail History harus bisa muncul dari pilihan tabel atas
         st.divider()
-
-        # 5. COMPONENT EXPLORER
+        
+        # Inisialisasi placeholder pencarian agar tidak error
         st.subheader("🔍 Component Explorer")
         search = st.text_input("Cari Part Number atau Deskripsi:")
         filtered = df_main.copy()
@@ -113,19 +116,18 @@ try:
             on_select="rerun", selection_mode="single-row"
         )
 
-        # 6. LOGIKA PENAMPILAN DETAIL & HISTORY (DARI KEDUA TABEL)
+        # Logika Penentuan Pilihan (Diletakkan di bagian Detail)
         sel_row = None
-        # Cek jika ada pilihan dari Top 10 Table
         if event_top10.selection.rows:
             sel_row = top_10.iloc[event_top10.selection.rows[0]]
-        # Cek jika ada pilihan dari Explorer (ini akan menimpa pilihan Top 10 jika keduanya diklik)
         elif event_explorer.selection.rows:
             sel_row = filtered.iloc[event_explorer.selection.rows[0]]
 
         if sel_row is not None:
-            pn_selected = str(sel_row['PART NUMBER']).strip()
+            # Bagian Detail & History diletakkan tepat setelah Component Explorer atau di area yang mudah diakses
+            # Saya letakkan di bagian bawah Explorer agar urutan visualnya logis: Pilih -> Lihat Detail di bawah
             st.write("---")
-            st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn_selected}")
+            st.subheader(f"🛠️ PART REMOVAL DETAIL: {str(sel_row['PART NUMBER']).strip()}")
             
             c1, c2, c3 = st.columns([4, 1, 1])
             c1.metric("Description", sel_row.get('DESCRIPTION', 'N/A'))
@@ -137,7 +139,7 @@ try:
             if not df_history.empty:
                 pn_col_h = next((c for c in df_history.columns if 'PART' in c), df_history.columns[1])
                 hist_match = df_history[
-                    (df_history[pn_col_h].astype(str).str.strip() == pn_selected) & 
+                    (df_history[pn_col_h].astype(str).str.strip() == str(sel_row['PART NUMBER']).strip()) & 
                     (df_history['DATE_DT'].dt.month == m_idx) & 
                     (df_history['DATE_DT'].dt.year == y_idx)
                 ].copy()
@@ -149,7 +151,7 @@ try:
                         column_config={"DATE_DISPLAY": "DATE"}
                     )
                 else:
-                    st.info(f"Tidak ada record removal untuk {pn_selected} pada periode {analysis_txt}.")
+                    st.info(f"Tidak ada record removal untuk {str(sel_row['PART NUMBER']).strip()} pada periode {analysis_txt}.")
 
         st.divider()
 
