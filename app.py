@@ -1,44 +1,24 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from datetime import datetime, timedelta
+from datetime import datetime
 
-# 1. KONFIGURASI HALAMAN & CSS
-st.set_page_config(page_title="Reliability Dashboard | Airfast Indonesia", layout="wide")
+# 1. KONFIGURASI HALAMAN
+st.set_config(page_title="Reliability Dashboard | Airfast Indonesia", layout="wide")
 
-st.markdown("""
-    <style>
-    .main { background-color: #f5f7f9; }
-    [data-testid="stMetricLabel"] { font-size: 14px !important; }
-    [data-testid="stMetricValue"] { font-size: 22px !important; }
-    .stMetric { background-color: #ffffff; padding: 10px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    </style>
-    """, unsafe_allow_html=True)
-
-# 2. LOGIKA PERIODE
-def get_period_labels(bulan_str, tahun_str):
-    m_map = {'JANUARY':1,'FEBRUARY':2,'MARCH':3,'APRIL':4,'MAY':5,'JUNE':6,
-             'JULY':7,'AUGUST':8,'SEPTEMBER':9,'OCTOBER':10,'NOVEMBER':11,'DECEMBER':12}
-    inv_map = {v: k for k, v in m_map.items()}
-    try:
-        curr_m = m_map.get(bulan_str.upper(), 12)
-        curr_y = int(float(tahun_str))
-        period_label = f"{bulan_str.capitalize()} {curr_y}"
-        dt_curr = datetime(curr_y, curr_m, 1)
-        dt_prev = dt_curr - timedelta(days=1)
-        analysis_label = f"{inv_map[dt_prev.month].capitalize()} {dt_prev.year}"
-        return period_label, analysis_label, dt_prev.month, dt_prev.year
-    except:
-        return f"{bulan_str} {tahun_str}", "N/A", 1, 2026
-
-# 3. FUNGSI LOAD DATA
-@st.cache_data
+# 2. FUNGSI LOAD DATA (Tanpa Cache agar Selalu Update saat File Disimpan/Upload)
 def load_all_data(file_name):
     try:
-        df_info = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None, nrows=3, usecols="A")
-        bln_raw = str(df_info.iloc[1, 0]).strip()
-        thn_raw = str(df_info.iloc[2, 0]).strip().replace('.0', '')
+        # A. AMBIL REFERENCE PERIOD DARI SHEET REMOVAL RATE CALCULATION (A2 & A3)
+        df_ref = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None, nrows=3, usecols="A")
+        ref_month_str = str(df_ref.iloc[1, 0]).strip().upper() # Sel A2
+        ref_year_int = int(float(str(df_ref.iloc[2, 0]).strip())) # Sel A3
         
+        m_map = {'JANUARY':1,'FEBRUARY':2,'MARCH':3,'APRIL':4,'MAY':5,'JUNE':6,
+                 'JULY':7,'AUGUST':8,'SEPTEMBER':9,'OCTOBER':10,'NOVEMBER':11,'DECEMBER':12}
+        ref_month_idx = m_map.get(ref_month_str, 1)
+
+        # B. LOAD TABEL UTAMA
         df_raw = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None)
         h_idx = 0
         for i, row in df_raw.iterrows():
@@ -48,11 +28,13 @@ def load_all_data(file_name):
         df_main = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=h_idx)
         df_main.columns = [str(c).strip().upper() for c in df_main.columns]
         
+        # Mapping Rate (Kolom I, L, O)
         df_main['RATE_3MO'] = pd.to_numeric(df_main.iloc[:, 8], errors='coerce').fillna(0)
         df_main['RATE_2MO'] = pd.to_numeric(df_main.iloc[:, 11], errors='coerce').fillna(0)
         df_main['RATE_1MO'] = pd.to_numeric(df_main.iloc[:, 14], errors='coerce').fillna(0)
         df_main['PN_DESC_CHART'] = df_main['PART NUMBER'].astype(str) + "<br>" + df_main['DESCRIPTION'].astype(str).str[:25]
         
+        # C. LOAD HISTORY
         df_hist = pd.read_excel(file_name, sheet_name="COMPONENT REPLACEMENT")
         df_hist.columns = [str(c).strip().upper() for c in df_hist.columns]
         date_col = next((c for c in df_hist.columns if 'DATE' in c), None)
@@ -60,80 +42,75 @@ def load_all_data(file_name):
             df_hist['DATE_DT'] = pd.to_datetime(df_hist[date_col], errors='coerce')
             df_hist['DATE_DISPLAY'] = df_hist['DATE_DT'].dt.strftime('%d-%b-%Y')
         
-        return df_main, df_hist, bln_raw, thn_raw
+        return df_main, df_hist, ref_month_str, ref_year_int, ref_month_idx
     except Exception as e:
         st.error(f"Gagal Load Data: {e}")
-        return pd.DataFrame(), pd.DataFrame(), "N/A", "N/A"
+        return pd.DataFrame(), pd.DataFrame(), "N/A", 2026, 1
 
 # --- MAIN APP ---
 FILE_PATH = 'COMPONENT_RELIABILITY_DHC6-300.xlsm'
 
-try:
-    df_main, df_history, bln_ref, thn_ref = load_all_data(FILE_PATH)
-    period_txt, analysis_txt, m_idx, y_idx = get_period_labels(bln_ref, thn_ref)
+# Tombol Refresh Manual untuk memaksa baca ulang file jika ada perubahan di Excel
+if st.sidebar.button("🔄 Sync with Excel (Sel A2/A3)"):
+    st.cache_data.clear()
 
+df_main, df_history, p_month, p_year, p_m_idx = load_all_data(FILE_PATH)
+
+try:
     if not df_main.empty:
         st.title("📊 Reliability Analysis Dashboard")
-        st.markdown(f"**Period Month:** {period_txt} | **Analysis Month:** {analysis_txt}")
+        st.info(f"📅 **Current Reference Period:** {p_month} {p_year} (Berdasarkan Sel A2 & A3)")
         st.divider()
 
-        # 4. CHART TOP 10
-        st.subheader("📈 Top 10 Removal Rate (Current Month)")
+        # 4. CHART TOP 10 (Dinamis berdasarkan RATE_1MO saat ini)
+        st.subheader(f"📈 Top 10 Removal Rate ({p_month} {p_year})")
         top_10 = df_main.sort_values(by='RATE_1MO', ascending=False).head(10).copy()
         fig = px.bar(top_10, x='PN_DESC_CHART', y='RATE_1MO', text_auto='.2f')
         fig.update_traces(marker_color='#F2B200', width=0.4) 
         fig.update_layout(xaxis_tickangle=-45, margin=dict(b=100), xaxis_title=None)
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        st.plotly_chart(fig, use_container_width=True)
 
-        # 5. TOP 10 DATA TABLE SUMMARY
-        with st.expander("📊 Click to View Top 10 Data Table Summary", expanded=False):
+        # 5. DATA TABLE SUMMARY
+        with st.expander("📊 Click to View Data Table Summary", expanded=False):
             event_top10 = st.dataframe(
                 top_10[['PART NUMBER', 'DESCRIPTION', 'RATE_1MO']], 
                 use_container_width=True, hide_index=True,
                 on_select="rerun", selection_mode="single-row"
             )
 
-        # 6. PART REMOVAL DETAIL & HISTORY (DENGAN SORT DESCENDING)
+        # 6. DETAIL & HISTORY (Dinamis mengikuti p_m_idx & p_year)
         if event_top10.selection.rows:
             sel_row = top_10.iloc[event_top10.selection.rows[0]]
             pn_selected = str(sel_row['PART NUMBER']).strip()
             
             pn_col_h = next((c for c in df_history.columns if 'PART' in c), df_history.columns[1])
             
-            # Filter data
+            # FILTER HISTORY: Harus Cocok PN + BULAN (p_m_idx) + TAHUN (p_year)
             hist_match = df_history[
                 (df_history[pn_col_h].astype(str).str.strip() == pn_selected) & 
-                (df_history['DATE_DT'].dt.month == m_idx) & 
-                (df_history['DATE_DT'].dt.year == y_idx)
-            ].copy()
+                (df_history['DATE_DT'].dt.month == p_m_idx) & 
+                (df_history['DATE_DT'].dt.year == p_year)
+            ].copy().sort_values(by='DATE_DT', ascending=False)
             
-            # URUTKAN BERDASARKAN TANGGAL DESCENDING (Terbaru ke Terlama)
-            hist_match = hist_match.sort_values(by='DATE_DT', ascending=False)
-            
-            qty_per_month = len(hist_match)
+            qty_rem = len(hist_match)
 
             st.write("---")
             st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn_selected}")
             
             c1, c2, c3 = st.columns([4, 1, 1])
             c1.metric("Description", sel_row.get('DESCRIPTION', 'N/A'))
-            c2.metric("Current Rate", f"{sel_row['RATE_1MO']:.2f}")
-            c3.metric("Total Qty Rem", f"{qty_per_month} EA", help=f"Total removal pada {analysis_txt}")
+            c2.metric("Rate Period", f"{sel_row['RATE_1MO']:.2f}")
+            c3.metric("Qty Removed", f"{qty_rem} EA")
             
-            st.write(f"**Part Removal History ({analysis_txt}):**")
-            
+            st.write(f"**History on {p_month} {p_year}:**")
             if not hist_match.empty:
-                st.dataframe(
-                    hist_match[['DATE_DISPLAY', 'REASON OF REMOVAL', 'TSN', 'TSO']], 
-                    use_container_width=True, hide_index=True,
-                    column_config={"DATE_DISPLAY": "DATE"}
-                )
+                st.dataframe(hist_match[['DATE_DISPLAY', 'REASON OF REMOVAL', 'TSN', 'TSO']], use_container_width=True, hide_index=True)
             else:
-                st.info(f"Tidak ada record removal untuk {pn_selected} pada periode {analysis_txt}.")
+                st.info(f"Tidak ada data pelepasan untuk {pn_selected} pada {p_month} {p_year}.")
         
         st.divider()
 
-        # 7. UPTREND PART REMOVAL
+        # 7. UPTREND (Tetap mengikuti logika kenaikan di kolom Excel)
         st.subheader("⚠️ UPTREND PART REMOVAL (3-Month Continuous Increase)")
         uptrend = df_main[
             (df_main['RATE_1MO'] > df_main['RATE_2MO']) & 
@@ -142,18 +119,14 @@ try:
         ].copy()
 
         if not uptrend.empty:
-            st.warning(f"Terdeteksi {len(uptrend)} komponen dengan tren kenaikan terus-menerus.")
+            st.warning(f"Terdeteksi {len(uptrend)} komponen dengan tren kenaikan.")
         else:
-            st.success("✅ Tidak ada uptrend removal rate dalam 3 bulan terakhir.")
+            st.success(f"✅ Tidak ada uptrend removal rate pada periode {p_month} {p_year}.")
 
         st.dataframe(
             uptrend[['PART NUMBER', 'DESCRIPTION', 'RATE_3MO', 'RATE_2MO', 'RATE_1MO']], 
             use_container_width=True, hide_index=True,
-            column_config={
-                "RATE_3MO": "RATE PREV. 3MO",
-                "RATE_2MO": "RATE PREV. 2MO",
-                "RATE_1MO": "RATE PREV. 1MO"
-            }
+            column_config={"RATE_3MO": "RATE PREV. 3MO", "RATE_2MO": "RATE PREV. 2MO", "RATE_1MO": "RATE PREV. 1MO"}
         )
 
 except Exception as e:
