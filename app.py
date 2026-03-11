@@ -1,3 +1,14 @@
+Siap, Pak Hery. Saya tangkap poinnya:
+
+Batang Grafik: Dirampingkan agar tidak terlalu lebar.
+
+Sumbu X: Menampilkan kombinasi Part Number dan Description agar informasinya lengkap dalam sekali lihat.
+
+Fix Error: Memastikan tidak ada lagi error merah 'DATE' yang mengganggu.
+
+Berikut adalah kode v2.1 yang sudah diperbarui:
+
+Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -12,43 +23,35 @@ st.markdown("""
     [data-testid="stMetricLabel"] { font-size: 14px !important; }
     [data-testid="stMetricValue"] { font-size: 22px !important; }
     .stMetric { background-color: #ffffff; padding: 10px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    /* Mematikan penangkapan kursor agar stabil di HP saat scroll */
     .js-plotly-plot .plotly .nsewdrag { pointer-events: none !important; }
     .js-plotly-plot .plotly .hoverlayer { pointer-events: auto !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. LOGIKA PERIODE (UNTUK HEADER)
+# 2. LOGIKA PERIODE
 def get_period_labels(bulan_str, tahun_str):
     m_map = {'JANUARY':1,'FEBRUARY':2,'MARCH':3,'APRIL':4,'MAY':5,'JUNE':6,
              'JULY':7,'AUGUST':8,'SEPTEMBER':9,'OCTOBER':10,'NOVEMBER':11,'DECEMBER':12}
     inv_map = {v: k for k, v in m_map.items()}
-    
     try:
-        # Period Month (Bulan yang tertulis di Excel)
         curr_m = m_map.get(bulan_str.upper(), 12)
         curr_y = int(float(tahun_str))
         period_label = f"{bulan_str.capitalize()} {curr_y}"
-        
-        # Analysis Month (1 bulan sebelumnya)
         dt_curr = datetime(curr_y, curr_m, 1)
         dt_prev = dt_curr - timedelta(days=1)
         analysis_label = f"{inv_map[dt_prev.month].capitalize()} {dt_prev.year}"
-        
         return period_label, analysis_label
     except:
         return f"{bulan_str} {tahun_str}", "N/A"
 
-# 3. FUNGSI LOAD DATA (FOKUS TOTAL PADA 1 SHEET)
+# 3. FUNGSI LOAD DATA
 @st.cache_data
 def load_reliability_data(file_name):
     try:
-        # Ambil Periode dari sel A2 & A3
         df_info = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None, nrows=3, usecols="A")
         bln_raw = str(df_info.iloc[1, 0]).strip()
         thn_raw = str(df_info.iloc[2, 0]).strip().replace('.0', '')
         
-        # Cari baris header PART NUMBER
         df_raw = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None)
         h_idx = 0
         for i, row in df_raw.iterrows():
@@ -65,6 +68,9 @@ def load_reliability_data(file_name):
         df['RATE_1MO'] = pd.to_numeric(df.iloc[:, 14], errors='coerce').fillna(0)
         df['QTY_REM_VAL'] = pd.to_numeric(df.iloc[:, 13], errors='coerce').fillna(0)
         
+        # Buat label gabungan PN + DESC untuk sumbu X
+        df['PN_DESC'] = df['PART NUMBER'].astype(str) + "<br>" + df['DESCRIPTION'].astype(str).str[:25]
+        
         return df, bln_raw, thn_raw
     except Exception as e:
         st.error(f"Gagal Load Data: {e}")
@@ -79,18 +85,25 @@ try:
 
     if not df_main.empty:
         st.title("📊 Reliability Analysis Dashboard")
-        # Header Keterangan Periode
         st.markdown(f"**Period Month:** {period_txt} | **Analysis Month:** {analysis_txt}")
         st.divider()
 
-        # 4. CHART TOP 10 (STABIL)
+        # 4. CHART TOP 10 (RAMPING & LABEL LENGKAP)
         st.subheader("📈 Top 10 Removal Rate (Current Month)")
         top_10 = df_main.sort_values(by='RATE_1MO', ascending=False).head(10).copy()
         
-        fig = px.bar(top_10, x='PART NUMBER', y='RATE_1MO', text_auto='.2f', 
-                     hover_data=['DESCRIPTION'], labels={'RATE_1MO': 'Rate'})
-        fig.update_traces(marker_color='#F2B200')
-        fig.update_layout(dragmode=False, xaxis_tickangle=-45, margin=dict(t=10, b=10))
+        fig = px.bar(top_10, x='PN_DESC', y='RATE_1MO', text_auto='.2f', 
+                     labels={'RATE_1MO': 'Rate', 'PN_DESC': 'Part Number & Description'})
+        
+        # Mengatur lebar batang (width) dan warna
+        fig.update_traces(marker_color='#F2B200', width=0.4) 
+        
+        fig.update_layout(
+            dragmode=False, 
+            xaxis_tickangle=-45, 
+            margin=dict(t=10, b=100), # Beri ruang bawah untuk label panjang
+            xaxis_title=None
+        )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
         # --- TABLE SUMMARY TOP 10 ---
@@ -117,7 +130,7 @@ try:
             on_select="rerun", selection_mode="single-row"
         )
 
-        # 6. PART REMOVAL DETAIL (BERSIH DARI ERROR 'DATE')
+        # 6. PART REMOVAL DETAIL (SISTEM ERROR 'DATE' FIX)
         if event.selection.rows:
             sel = filtered.iloc[event.selection.rows[0]]
             st.write("---")
@@ -128,13 +141,12 @@ try:
             with c2: st.metric("Current Rate", f"{sel['RATE_1MO']:.2f}")
             with c3: st.metric("Total Qty Rem", f"{int(sel['QTY_REM_VAL'])} EA")
             
-            # Tren 3 Bulan tanpa mencari data di sheet lain
             st.write("**Recent Removal Trend (Rates):**")
             trend_data = pd.DataFrame({
                 "Periode": ["3 Months Ago (I)", "2 Months Ago (L)", "Current Analysis (O)"],
                 "Removal Rate": [sel['RATE_3MO'], sel['RATE_2MO'], sel['RATE_1MO']]
             })
-            st.table(trend_data) # Menggunakan table agar statis dan rapi di HP
+            st.table(trend_data)
 
         st.divider()
 
