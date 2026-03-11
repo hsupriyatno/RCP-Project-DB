@@ -7,7 +7,7 @@ from dateutil.relativedelta import relativedelta
 # 1. KONFIGURASI HALAMAN
 st.set_page_config(page_title="Reliability Dashboard | Airfast Indonesia", layout="wide")
 
-# 2. FUNGSI LOAD DATA
+# 2. FUNGSI LOAD DATA (DIPERKUAT)
 def load_all_data(file_name):
     try:
         # AMBIL REFERENCE PERIOD (A2/A3)
@@ -27,7 +27,7 @@ def load_all_data(file_name):
         c_year_int = target_date.year
         c_month_idx = target_date.month
 
-        # LOAD TABEL UTAMA (REMOVAL RATE CALCULATION)
+        # LOAD TABEL UTAMA
         df_raw = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None)
         h_idx = 0
         for i, row in df_raw.iterrows():
@@ -37,7 +37,7 @@ def load_all_data(file_name):
         df_main = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=h_idx)
         df_main.columns = [str(c).strip().upper() for c in df_main.columns]
         
-        # MAPPING KOLOM RATE (I=8, L=11, O=14)
+        # DEFINISI KOLOM RATE (I, L, O) - KUNCI ERROR DISINI
         df_main['RATE_3MO'] = pd.to_numeric(df_main.iloc[:, 8], errors='coerce').fillna(0)
         df_main['RATE_2MO'] = pd.to_numeric(df_main.iloc[:, 11], errors='coerce').fillna(0)
         df_main['RATE_1MO'] = pd.to_numeric(df_main.iloc[:, 14], errors='coerce').fillna(0)
@@ -62,9 +62,13 @@ FILE_PATH = 'COMPONENT_RELIABILITY_DHC6-300.xlsm'
 if 'data_refresh' not in st.session_state or st.sidebar.button("🔄 Sync with Excel"):
     res = load_all_data(FILE_PATH)
     if res[0] is not None:
-        st.session_state.df_m = res[0]; st.session_state.df_h = res[1]
-        st.session_state.p_m = res[2]; st.session_state.p_y = res[3]
-        st.session_state.c_m = res[4]; st.session_state.c_y = res[5]; st.session_state.c_idx = res[6]
+        st.session_state.df_m = res[0]
+        st.session_state.df_h = res[1]
+        st.session_state.p_m = res[2]
+        st.session_state.p_y = res[3]
+        st.session_state.c_m = res[4]
+        st.session_state.c_y = res[5]
+        st.session_state.c_idx = res[6]
         st.session_state.data_refresh = True
 
 if 'data_refresh' in st.session_state:
@@ -86,7 +90,7 @@ if 'data_refresh' in st.session_state:
     st.divider()
 
     # 5. DATA TABLE SUMMARY
-    with st.expander("📊 Click to View Top 10 Data Table Summary", expanded=False):
+    with st.expander("🔍 Click to View Top 10 Data Table Summary", expanded=False):
         sel_event = st.dataframe(
             top_10[['PART NUMBER', 'DESCRIPTION', 'RATE_1MO']], 
             use_container_width=True, hide_index=True,
@@ -112,18 +116,18 @@ if 'data_refresh' in st.session_state:
         m2.metric("Current Rate", f"{sel_row['RATE_1MO']:.2f}")
         m3.metric("Total Qty Rem", f"{len(hist_match)} EA")
         
-        st.write(f"**Part Removal History ({st.session_state.c_m} {st.session_state.c_y}):**") #
+        st.write(f"**Part Removal History ({st.session_state.c_m} {st.session_state.c_y}):**")
         if not hist_match.empty:
             st.table(hist_match[['DATE_DISPLAY', 'REASON OF REMOVAL', 'TSN', 'TSO']])
         else:
-            st.info(f"No removal records found for {pn_sel} in {st.session_state.c_m} {st.session_state.c_y}.")
+            st.info(f"No removal records for {pn_sel} in {st.session_state.c_m}.")
 
     st.divider()
 
-    # 7. UPTREND PART REMOVAL (TABEL PALING BAWAH)
+    # 7. UPTREND PART REMOVAL (DIBAWAH DETAIL)
     st.subheader("⚠️ UPTREND PART REMOVAL (3-Month Continuous Increase)")
     
-    # Logika Filter: Rate O > Rate L > Rate I (Abaikan Rate 0)
+    # Filter Uptrend: O > L > I dan I > 0
     uptrend_df = st.session_state.df_m[
         (st.session_state.df_m['RATE_1MO'] > st.session_state.df_m['RATE_2MO']) & 
         (st.session_state.df_m['RATE_2MO'] > st.session_state.df_m['RATE_3MO']) & 
@@ -131,21 +135,17 @@ if 'data_refresh' in st.session_state:
     ].copy()
 
     if not uptrend_df.empty:
-        st.warning(f"Terdeteksi {len(uptrend_df)} komponen yang mengalami kenaikan removal rate berturut-turut.")
+        st.warning(f"Terdeteksi {len(uptrend_df)} komponen dengan tren kenaikan removal rate.")
+        st.dataframe(
+            uptrend_df[['PART NUMBER', 'DESCRIPTION', 'RATE_3MO', 'RATE_2MO', 'RATE_1MO']], 
+            use_container_width=True, hide_index=True,
+            column_config={
+                "RATE_3MO": "RATE PREVIOUS 3 MO (I)", 
+                "RATE_2MO": "RATE PREVIOUS 2 MO (L)", 
+                "RATE_1MO": "RATE PREVIOUS 1 MO (O)"
+            }
+        )
     else:
-        st.success(f"✅ Tidak ada uptrend removal rate pada periode analisis {st.session_state.c_m} {st.session_state.c_y}.")
-
-    # Tampilkan Tabel Uptrend
-    st.dataframe(
-        uptrend_df[['PART NUMBER', 'DESCRIPTION', 'RATE_3MO', 'RATE_2MO', 'RATE_1MO']], 
-        use_container_width=True, 
-        hide_index=True,
-        column_config={
-            "RATE_3MO": "RATE PREVIOUS 3 MO (I)", 
-            "RATE_2MO": "RATE PREVIOUS 2 MO (L)", 
-            "RATE_1MO": "RATE PREVIOUS 1 MO (O)"
-        }
-    )
+        st.success(f"✅ Tidak ada uptrend removal rate pada periode {st.session_state.c_m} {st.session_state.c_y}.")
 
 st.sidebar.info(f"User: HERY SUPRIYATNO\nReliability Engineer")
-
