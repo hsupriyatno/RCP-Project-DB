@@ -3,14 +3,15 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime
 
-# 1. KONFIGURASI HALAMAN (SUDAH DIPERBAIKI)
+# 1. KONFIGURASI HALAMAN
 st.set_page_config(page_title="Reliability Dashboard | Airfast Indonesia", layout="wide")
 
-# 2. FUNGSI LOAD DATA
-def load_all_data(file_name):
+# 2. FUNGSI LOAD DATA (DIUBAH: Menghilangkan @st.cache agar data selalu fresh)
+def load_all_data_fresh(file_name):
     try:
+        # PENTING: Gunakan engine='openpyxl' agar bisa membaca file yang mungkin sedang terbuka
         # AMBIL PERIOD DARI SEL A2 & A3
-        df_ref = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None, nrows=3, usecols="A")
+        df_ref = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None, nrows=3, usecols="A", engine='openpyxl')
         ref_month_str = str(df_ref.iloc[1, 0]).strip().upper() 
         ref_year_int = int(float(str(df_ref.iloc[2, 0]).strip())) 
         
@@ -19,13 +20,13 @@ def load_all_data(file_name):
         ref_month_idx = m_map.get(ref_month_str, 1)
 
         # LOAD TABEL UTAMA
-        df_raw = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None)
+        df_raw = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None, engine='openpyxl')
         h_idx = 0
         for i, row in df_raw.iterrows():
             if 'PART NUMBER' in [str(x).upper() for x in row.values]:
                 h_idx = i
                 break
-        df_main = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=h_idx)
+        df_main = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=h_idx, engine='openpyxl')
         df_main.columns = [str(c).strip().upper() for c in df_main.columns]
         
         # Mapping Kolom Rate secara posisi (I=8, L=11, O=14)
@@ -35,7 +36,7 @@ def load_all_data(file_name):
         df_main['PN_DESC_CHART'] = df_main['PART NUMBER'].astype(str) + "<br>" + df_main['DESCRIPTION'].astype(str).str[:25]
         
         # LOAD HISTORY
-        df_hist = pd.read_excel(file_name, sheet_name="COMPONENT REPLACEMENT")
+        df_hist = pd.read_excel(file_name, sheet_name="COMPONENT REPLACEMENT", engine='openpyxl')
         df_hist.columns = [str(c).strip().upper() for c in df_hist.columns]
         date_col = next((c for c in df_hist.columns if 'DATE' in c), None)
         if date_col:
@@ -50,16 +51,22 @@ def load_all_data(file_name):
 # --- MAIN APP ---
 FILE_PATH = 'COMPONENT_RELIABILITY_DHC6-300.xlsm'
 
-# Tombol Sync di Sidebar
-if st.sidebar.button("🔄 Sync with Excel"):
-    st.cache_data.clear()
+# Sidebar Refresh
+st.sidebar.header("Data Control")
+if st.sidebar.button("🔄 Reload From Excel Now"):
+    # Clear session state if any
+    st.rerun()
 
-df_main, df_history, p_month, p_year, p_m_idx = load_all_data(FILE_PATH)
+# Memanggil data TANPA CACHE
+df_main, df_history, p_month, p_year, p_m_idx = load_all_data_fresh(FILE_PATH)
 
 try:
     if not df_main.empty:
         st.title("📊 Reliability Analysis Dashboard")
-        st.info(f"📅 **Current Period (A2/A3):** {p_month} {p_year}")
+        
+        # Tampilan Period yang besar agar mudah dikonfirmasi
+        st.success(f"📅 **Dashboard Active Period: {p_month} {p_year}**")
+        
         st.divider()
 
         # 4. CHART TOP 10
@@ -85,7 +92,7 @@ try:
             
             pn_col_h = next((c for c in df_history.columns if 'PART' in c), df_history.columns[1])
             
-            # Filter History: PN + Bulan (p_m_idx) + Tahun (p_year)
+            # Filter History: Menyesuaikan Bulan (p_m_idx) dan Tahun (p_year) dari Excel
             hist_match = df_history[
                 (df_history[pn_col_h].astype(str).str.strip() == pn_selected) & 
                 (df_history['DATE_DT'].dt.month == p_m_idx) & 
@@ -126,11 +133,14 @@ try:
         st.dataframe(
             uptrend[['PART NUMBER', 'DESCRIPTION', 'RATE_3MO', 'RATE_2MO', 'RATE_1MO']], 
             use_container_width=True, hide_index=True,
-            column_config={"RATE_3MO": "RATE PREV. 3MO", "RATE_2MO": "RATE PREV. 2MO", "RATE_1MO": "RATE PREV. 1MO"}
+            column_config={
+                "RATE_3MO": "RATE PREV. 3MO", 
+                "RATE_2MO": "RATE PREV. 2MO", 
+                "RATE_1MO": "RATE PREV. 1MO"
+            }
         )
 
 except Exception as e:
     st.error(f"Sistem Error: {e}")
 
-st.sidebar.info(f"User: HERY SUPRIYATNO\nReliability Engineer")
-
+st.sidebar.info(f"User: HERY SUPRIYATNO\nAviation Reliability Engineer")
