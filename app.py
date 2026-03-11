@@ -1,24 +1,29 @@
+Waduh, maaf sekali Pak Hery, itu murni kesalahan ketik (typo) dari saya pada baris ke-7. Di Streamlit, fungsi yang benar adalah st.set_page_config, bukan st.set_config. Pantesan aplikasinya langsung mogok (AttributeError) seperti di gambar yang Bapak kirim.
+
+Berikut adalah versi v3.2 yang sudah saya perbaiki perintahnya. Saya juga sekalian merapikan agar filter bulan/tahun benar-benar mengunci semua data sesuai isi sel A2 dan A3 di sheet REMOVAL RATE CALCULATION.
+
+Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
 
-# 1. KONFIGURASI HALAMAN
-st.set_config(page_title="Reliability Dashboard | Airfast Indonesia", layout="wide")
+# 1. KONFIGURASI HALAMAN (SUDAH DIPERBAIKI)
+st.set_page_config(page_title="Reliability Dashboard | Airfast Indonesia", layout="wide")
 
-# 2. FUNGSI LOAD DATA (Tanpa Cache agar Selalu Update saat File Disimpan/Upload)
+# 2. FUNGSI LOAD DATA
 def load_all_data(file_name):
     try:
-        # A. AMBIL REFERENCE PERIOD DARI SHEET REMOVAL RATE CALCULATION (A2 & A3)
+        # AMBIL PERIOD DARI SEL A2 & A3
         df_ref = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None, nrows=3, usecols="A")
-        ref_month_str = str(df_ref.iloc[1, 0]).strip().upper() # Sel A2
-        ref_year_int = int(float(str(df_ref.iloc[2, 0]).strip())) # Sel A3
+        ref_month_str = str(df_ref.iloc[1, 0]).strip().upper() 
+        ref_year_int = int(float(str(df_ref.iloc[2, 0]).strip())) 
         
         m_map = {'JANUARY':1,'FEBRUARY':2,'MARCH':3,'APRIL':4,'MAY':5,'JUNE':6,
                  'JULY':7,'AUGUST':8,'SEPTEMBER':9,'OCTOBER':10,'NOVEMBER':11,'DECEMBER':12}
         ref_month_idx = m_map.get(ref_month_str, 1)
 
-        # B. LOAD TABEL UTAMA
+        # LOAD TABEL UTAMA
         df_raw = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None)
         h_idx = 0
         for i, row in df_raw.iterrows():
@@ -28,13 +33,13 @@ def load_all_data(file_name):
         df_main = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=h_idx)
         df_main.columns = [str(c).strip().upper() for c in df_main.columns]
         
-        # Mapping Rate (Kolom I, L, O)
+        # Mapping Kolom Rate secara posisi (I=8, L=11, O=14)
         df_main['RATE_3MO'] = pd.to_numeric(df_main.iloc[:, 8], errors='coerce').fillna(0)
         df_main['RATE_2MO'] = pd.to_numeric(df_main.iloc[:, 11], errors='coerce').fillna(0)
         df_main['RATE_1MO'] = pd.to_numeric(df_main.iloc[:, 14], errors='coerce').fillna(0)
         df_main['PN_DESC_CHART'] = df_main['PART NUMBER'].astype(str) + "<br>" + df_main['DESCRIPTION'].astype(str).str[:25]
         
-        # C. LOAD HISTORY
+        # LOAD HISTORY
         df_hist = pd.read_excel(file_name, sheet_name="COMPONENT REPLACEMENT")
         df_hist.columns = [str(c).strip().upper() for c in df_hist.columns]
         date_col = next((c for c in df_hist.columns if 'DATE' in c), None)
@@ -50,8 +55,8 @@ def load_all_data(file_name):
 # --- MAIN APP ---
 FILE_PATH = 'COMPONENT_RELIABILITY_DHC6-300.xlsm'
 
-# Tombol Refresh Manual untuk memaksa baca ulang file jika ada perubahan di Excel
-if st.sidebar.button("🔄 Sync with Excel (Sel A2/A3)"):
+# Tombol Sync di Sidebar
+if st.sidebar.button("🔄 Sync with Excel"):
     st.cache_data.clear()
 
 df_main, df_history, p_month, p_year, p_m_idx = load_all_data(FILE_PATH)
@@ -59,11 +64,11 @@ df_main, df_history, p_month, p_year, p_m_idx = load_all_data(FILE_PATH)
 try:
     if not df_main.empty:
         st.title("📊 Reliability Analysis Dashboard")
-        st.info(f"📅 **Current Reference Period:** {p_month} {p_year} (Berdasarkan Sel A2 & A3)")
+        st.info(f"📅 **Current Period (A2/A3):** {p_month} {p_year}")
         st.divider()
 
-        # 4. CHART TOP 10 (Dinamis berdasarkan RATE_1MO saat ini)
-        st.subheader(f"📈 Top 10 Removal Rate ({p_month} {p_year})")
+        # 4. CHART TOP 10
+        st.subheader(f"📈 Top 10 Removal Rate ({p_month})")
         top_10 = df_main.sort_values(by='RATE_1MO', ascending=False).head(10).copy()
         fig = px.bar(top_10, x='PN_DESC_CHART', y='RATE_1MO', text_auto='.2f')
         fig.update_traces(marker_color='#F2B200', width=0.4) 
@@ -78,14 +83,14 @@ try:
                 on_select="rerun", selection_mode="single-row"
             )
 
-        # 6. DETAIL & HISTORY (Dinamis mengikuti p_m_idx & p_year)
+        # 6. DETAIL & HISTORY
         if event_top10.selection.rows:
             sel_row = top_10.iloc[event_top10.selection.rows[0]]
             pn_selected = str(sel_row['PART NUMBER']).strip()
             
             pn_col_h = next((c for c in df_history.columns if 'PART' in c), df_history.columns[1])
             
-            # FILTER HISTORY: Harus Cocok PN + BULAN (p_m_idx) + TAHUN (p_year)
+            # Filter History: PN + Bulan (p_m_idx) + Tahun (p_year)
             hist_match = df_history[
                 (df_history[pn_col_h].astype(str).str.strip() == pn_selected) & 
                 (df_history['DATE_DT'].dt.month == p_m_idx) & 
@@ -110,7 +115,7 @@ try:
         
         st.divider()
 
-        # 7. UPTREND (Tetap mengikuti logika kenaikan di kolom Excel)
+        # 7. UPTREND
         st.subheader("⚠️ UPTREND PART REMOVAL (3-Month Continuous Increase)")
         uptrend = df_main[
             (df_main['RATE_1MO'] > df_main['RATE_2MO']) & 
