@@ -48,7 +48,7 @@ def load_all_data(file_name):
         df_main = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=h_idx)
         df_main.columns = [str(c).strip().upper() for c in df_main.columns]
         
-        # Kolom I (8), L (11), O (14) untuk Rate 3 bulan terakhir
+        # Mapping Data Historis (Kolom I, L, O)
         df_main['RATE_3MO'] = pd.to_numeric(df_main.iloc[:, 8], errors='coerce').fillna(0)
         df_main['RATE_2MO'] = pd.to_numeric(df_main.iloc[:, 11], errors='coerce').fillna(0)
         df_main['RATE_1MO'] = pd.to_numeric(df_main.iloc[:, 14], errors='coerce').fillna(0)
@@ -129,33 +129,33 @@ try:
         
         st.divider()
 
-        # 7. UPTREND PART REMOVAL (MODIFIKASI: TETAP TAMPIL)
+        # 7. UPTREND PART REMOVAL (HEADER DIPERBARUI)
         st.subheader("⚠️ UPTREND PART REMOVAL (3-Month Continuous Increase)")
         
-        # Logika: Rate Bulan ini > Rate Bulan Lalu > Rate 2 Bulan Lalu (Semua > 0)
         uptrend = df_main[
             (df_main['RATE_1MO'] > df_main['RATE_2MO']) & 
             (df_main['RATE_2MO'] > df_main['RATE_3MO']) & 
             (df_main['RATE_3MO'] > 0)
         ].copy()
 
+        # Menyiapkan kolom dengan nama baru
+        uptrend_display = uptrend[['PART NUMBER', 'DESCRIPTION', 'RATE_3MO', 'RATE_2MO', 'RATE_1MO']].copy()
+
         if not uptrend.empty:
             st.warning(f"Terdeteksi {len(uptrend)} komponen dengan tren kenaikan terus-menerus.")
-            st.dataframe(
-                uptrend[['PART NUMBER', 'DESCRIPTION', 'RATE_3MO', 'RATE_2MO', 'RATE_1MO']], 
-                use_container_width=True, hide_index=True,
-                column_config={
-                    "RATE_3MO": "Rate (T-2)",
-                    "RATE_2MO": "Rate (T-1)",
-                    "RATE_1MO": "Rate (Curr)"
-                }
-            )
         else:
-            # Menampilkan tabel kosong dengan keterangan sesuai permintaan
             st.success("✅ Tidak ada uptrend removal rate dalam 3 bulan terakhir.")
-            # Membuat dataframe kosong dengan struktur kolom yang sama untuk visual tabel tetap ada
-            empty_df = pd.DataFrame(columns=['PART NUMBER', 'DESCRIPTION', 'RATE_3MO', 'RATE_2MO', 'RATE_1MO'])
-            st.dataframe(empty_df, use_container_width=True, hide_index=True)
+
+        # Tabel akan selalu tampil dengan header baru
+        st.dataframe(
+            uptrend_display, 
+            use_container_width=True, hide_index=True,
+            column_config={
+                "RATE_3MO": "RATE PREV. 3MO",
+                "RATE_2MO": "RATE PREV. 2MO",
+                "RATE_1MO": "RATE PREV. 1MO"
+            }
+        )
 
 except Exception as e:
     st.error(f"Sistem Error: {e}")
