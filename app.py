@@ -29,81 +29,70 @@ def get_period_labels(bulan_str, tahun_str):
         dt_curr = datetime(curr_y, curr_m, 1)
         dt_prev = dt_curr - timedelta(days=1)
         analysis_label = f"{inv_map[dt_prev.month].capitalize()} {dt_prev.year}"
-        return period_label, analysis_label
+        return period_label, analysis_label, dt_prev.month, dt_prev.year
     except:
-        return f"{bulan_str} {tahun_str}", "N/A"
+        return f"{bulan_str} {tahun_str}", "N/A", 1, 2026
 
-# 3. FUNGSI LOAD DATA
+# 3. FUNGSI LOAD DATA (RELIABILITY & HISTORY)
 @st.cache_data
-def load_reliability_data(file_name):
+def load_all_data(file_name):
     try:
+        # Ambil info periode
         df_info = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None, nrows=3, usecols="A")
         bln_raw = str(df_info.iloc[1, 0]).strip()
         thn_raw = str(df_info.iloc[2, 0]).strip().replace('.0', '')
         
+        # Load Sheet Utama
         df_raw = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None)
         h_idx = 0
         for i, row in df_raw.iterrows():
             if 'PART NUMBER' in [str(x).upper() for x in row.values]:
                 h_idx = i
                 break
+        df_main = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=h_idx)
+        df_main.columns = [str(c).strip().upper() for c in df_main.columns]
         
-        df = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=h_idx)
-        df.columns = [str(c).strip().upper() for c in df.columns]
+        # Mapping Kolom Rate & Qty
+        df_main['RATE_3MO'] = pd.to_numeric(df_main.iloc[:, 8], errors='coerce').fillna(0)
+        df_main['RATE_2MO'] = pd.to_numeric(df_main.iloc[:, 11], errors='coerce').fillna(0)
+        df_main['RATE_1MO'] = pd.to_numeric(df_main.iloc[:, 14], errors='coerce').fillna(0)
+        df_main['QTY_VAL'] = pd.to_numeric(df_main.iloc[:, 13], errors='coerce').fillna(0)
+        df_main['PN_DESC'] = df_main['PART NUMBER'].astype(str) + "<br>" + df_main['DESCRIPTION'].astype(str).str[:25]
         
-        # Mapping Kolom Berdasarkan Index (I=8, L=11, O=14, N=13 untuk QTY)
-        df['RATE_3MO'] = pd.to_numeric(df.iloc[:, 8], errors='coerce').fillna(0)
-        df['RATE_2MO'] = pd.to_numeric(df.iloc[:, 11], errors='coerce').fillna(0)
-        df['RATE_1MO'] = pd.to_numeric(df.iloc[:, 14], errors='coerce').fillna(0)
-        df['QTY_REM_VAL'] = pd.to_numeric(df.iloc[:, 13], errors='coerce').fillna(0)
+        # Load Sheet History (COMPONENT REPLACEMENT)
+        df_hist = pd.read_excel(file_name, sheet_name="COMPONENT REPLACEMENT")
+        df_hist.columns = [str(c).strip().upper() for c in df_hist.columns]
         
-        # Buat label gabungan PN + DESC untuk sumbu X
-        df['PN_DESC'] = df['PART NUMBER'].astype(str) + "<br>" + df['DESCRIPTION'].astype(str).str[:25]
+        # Cari kolom Date secara fleksibel
+        date_col = next((c for c in df_hist.columns if 'DATE' in c), None)
+        if date_col:
+            df_hist['DATE_DT'] = pd.to_datetime(df_hist[date_col], errors='coerce')
+            df_hist['DATE_DISPLAY'] = df_hist['DATE_DT'].dt.strftime('%d-%b-%Y')
         
-        return df, bln_raw, thn_raw
+        return df_main, df_hist, bln_raw, thn_raw
     except Exception as e:
         st.error(f"Gagal Load Data: {e}")
-        return pd.DataFrame(), "N/A", "N/A"
+        return pd.DataFrame(), pd.DataFrame(), "N/A", "N/A"
 
 # --- MAIN APP ---
 FILE_PATH = 'COMPONENT_RELIABILITY_DHC6-300.xlsm'
 
 try:
-    df_main, bln_ref, thn_ref = load_reliability_data(FILE_PATH)
-    period_txt, analysis_txt = get_period_labels(bln_ref, thn_ref)
+    df_main, df_history, bln_ref, thn_ref = load_all_data(FILE_PATH)
+    period_txt, analysis_txt, m_idx, y_idx = get_period_labels(bln_ref, thn_ref)
 
     if not df_main.empty:
         st.title("📊 Reliability Analysis Dashboard")
         st.markdown(f"**Period Month:** {period_txt} | **Analysis Month:** {analysis_txt}")
         st.divider()
 
-        # 4. CHART TOP 10 (RAMPING & LABEL LENGKAP)
+        # 4. CHART TOP 10
         st.subheader("📈 Top 10 Removal Rate (Current Month)")
         top_10 = df_main.sort_values(by='RATE_1MO', ascending=False).head(10).copy()
-        
-        fig = px.bar(top_10, x='PN_DESC', y='RATE_1MO', text_auto='.2f', 
-                     labels={'RATE_1MO': 'Rate', 'PN_DESC': 'Part Number & Description'})
-        
-        # Mengatur lebar batang (width) dan warna
+        fig = px.bar(top_10, x='PN_DESC', y='RATE_1MO', text_auto='.2f')
         fig.update_traces(marker_color='#F2B200', width=0.4) 
-        
-        fig.update_layout(
-            dragmode=False, 
-            xaxis_tickangle=-45, 
-            margin=dict(t=10, b=100), # Beri ruang bawah untuk label panjang
-            xaxis_title=None
-        )
+        fig.update_layout(dragmode=False, xaxis_tickangle=-45, margin=dict(b=100), xaxis_title=None)
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-
-        # --- TABLE SUMMARY TOP 10 ---
-        with st.expander("📊 Click to View Top 10 Data Table"):
-            st.dataframe(
-                top_10[['PART NUMBER', 'DESCRIPTION', 'QTY_REM_VAL', 'RATE_1MO']], 
-                use_container_width=True, hide_index=True,
-                column_config={"QTY_REM_VAL": "QTY REM", "RATE_1MO": "RATE"}
-            )
-
-        st.divider()
 
         # 5. COMPONENT EXPLORER
         st.subheader("🔍 Component Explorer")
@@ -119,46 +108,60 @@ try:
             on_select="rerun", selection_mode="single-row"
         )
 
-        # 6. PART REMOVAL DETAIL (SISTEM ERROR 'DATE' FIX)
+        # 6. PART REMOVAL DETAIL & HISTORY (FITUR KEMBALI)
         if event.selection.rows:
             sel = filtered.iloc[event.selection.rows[0]]
+            pn_selected = str(sel['PART NUMBER']).strip()
             st.write("---")
-            st.subheader(f"🛠️ PART REMOVAL DETAIL: {sel['PART NUMBER']}")
+            st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn_selected}")
             
             c1, c2, c3 = st.columns([4, 1, 1])
-            with c1: st.metric("Description", sel.get('DESCRIPTION', 'N/A'))
-            with c2: st.metric("Current Rate", f"{sel['RATE_1MO']:.2f}")
-            with c3: st.metric("Total Qty Rem", f"{int(sel['QTY_REM_VAL'])} EA")
+            c1.metric("Description", sel.get('DESCRIPTION', 'N/A'))
+            c2.metric("Current Rate", f"{sel['RATE_1MO']:.2f}")
+            c3.metric("Total Qty Rem", f"{int(sel['QTY_VAL'])} EA")
             
-            st.write("**Recent Removal Trend (Rates):**")
-            trend_data = pd.DataFrame({
-                "Periode": ["3 Months Ago (I)", "2 Months Ago (L)", "Current Analysis (O)"],
-                "Removal Rate": [sel['RATE_3MO'], sel['RATE_2MO'], sel['RATE_1MO']]
-            })
-            st.table(trend_data)
+            # --- TABEL PART REMOVAL HISTORY ---
+            st.write(f"**Part Removal History ({analysis_txt}):**")
+            
+            if not df_history.empty:
+                # Cari kolom PN di history
+                pn_col_h = next((c for c in df_history.columns if 'PART' in c), df_history.columns[1])
+                
+                # Filter berdasarkan PN dan Bulan Analisis
+                hist_match = df_history[
+                    (df_history[pn_col_h].astype(str).str.strip() == pn_selected) & 
+                    (df_history['DATE_DT'].dt.month == m_idx) & 
+                    (df_history['DATE_DT'].dt.year == y_idx)
+                ].copy()
+                
+                if not hist_match.empty:
+                    # Menampilkan kolom sesuai permintaan Bapak
+                    cols_to_show = []
+                    for c in ['DATE_DISPLAY', 'REASON OF REMOVAL', 'TSN', 'TSO']:
+                        if c in hist_match.columns or c == 'DATE_DISPLAY':
+                            cols_to_show.append(c)
+                    
+                    st.dataframe(
+                        hist_match[cols_to_show], 
+                        use_container_width=True, 
+                        hide_index=True,
+                        column_config={"DATE_DISPLAY": "DATE"}
+                    )
+                else:
+                    st.info(f"Tidak ada record removal untuk {pn_selected} pada periode {analysis_txt}.")
 
         st.divider()
 
         # 7. UPTREND PART REMOVAL
         st.subheader("⚠️ UPTREND PART REMOVAL (3-Month Increase)")
-        uptrend = df_main[
-            (df_main['RATE_3MO'] > 0) & 
-            (df_main['RATE_2MO'] > df_main['RATE_3MO']) & 
-            (df_main['RATE_1MO'] > df_main['RATE_2MO'])
-        ].copy()
-
+        uptrend = df_main[(df_main['RATE_3MO'] > 0) & (df_main['RATE_2MO'] > df_main['RATE_3MO']) & (df_main['RATE_1MO'] > df_main['RATE_2MO'])].copy()
         if not uptrend.empty:
             st.warning(f"Terdeteksi {len(uptrend)} komponen dengan tren kenaikan.")
-            st.dataframe(
-                uptrend[['PART NUMBER', 'DESCRIPTION', 'RATE_3MO', 'RATE_2MO', 'RATE_1MO']], 
-                use_container_width=True, hide_index=True,
-                column_config={"RATE_3MO": "Rate (I)", "RATE_2MO": "Rate (L)", "RATE_1MO": "Rate (O) 🚩"}
-            )
+            st.dataframe(uptrend[['PART NUMBER', 'DESCRIPTION', 'RATE_3MO', 'RATE_2MO', 'RATE_1MO']], use_container_width=True, hide_index=True)
         else:
-            st.success("Analisis Tren: Stabil (Tidak ada kenaikan beruntun).")
+            st.success("Analisis Tren: Stabil.")
 
 except Exception as e:
     st.error(f"Sistem Error: {e}")
 
-st.sidebar.info(f"User: HERY SUPRIYATNO\nAviation Reliability Engineer")
-
+st.sidebar.info(f"User: HERY SUPRIYATNO\nReliability Engineer")
