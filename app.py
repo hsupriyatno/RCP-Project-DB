@@ -4,13 +4,13 @@ import plotly.express as px
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
-# 1. KONFIGURASI HALAMAN
+# 1. KONFIGURASI HALAMAN (DIPERBAIKI AGAR TIDAK ATTRIBUTE ERROR)
 st.set_page_config(page_title="Reliability Dashboard | Airfast Indonesia", layout="wide")
 
-# 2. FUNGSI LOAD DATA (DIPERKUAT)
+# 2. FUNGSI LOAD DATA
 def load_all_data(file_name):
     try:
-        # AMBIL REFERENCE PERIOD (A2/A3)
+        # A. AMBIL REFERENCE PERIOD (A2/A3)
         df_ref = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None, nrows=3, usecols="A")
         ref_month_str = str(df_ref.iloc[1, 0]).strip().upper() 
         ref_year_int = int(float(str(df_ref.iloc[2, 0]).strip())) 
@@ -19,7 +19,7 @@ def load_all_data(file_name):
                  'JULY':7,'AUGUST':8,'SEPTEMBER':9,'OCTOBER':10,'NOVEMBER':11,'DECEMBER':12}
         ref_month_idx = m_map.get(ref_month_str, 1)
 
-        # LOGIKA N-1
+        # B. LOGIKA N-1 (BULAN ANALISIS)
         input_date = datetime(ref_year_int, ref_month_idx, 1)
         target_date = input_date - relativedelta(months=1)
         
@@ -27,23 +27,24 @@ def load_all_data(file_name):
         c_year_int = target_date.year
         c_month_idx = target_date.month
 
-        # LOAD TABEL UTAMA
+        # C. LOAD SHEET REMOVAL RATE CALCULATION (SUMBER UTAMA)
         df_raw = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None)
         h_idx = 0
         for i, row in df_raw.iterrows():
             if 'PART NUMBER' in [str(x).upper() for x in row.values]:
                 h_idx = i
                 break
+        
         df_main = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=h_idx)
         df_main.columns = [str(c).strip().upper() for c in df_main.columns]
         
-        # DEFINISI KOLOM RATE (I, L, O) - KUNCI ERROR DISINI
+        # PROSES KOLOM RATE SECARA MANDIRI (I=8, L=11, O=14)
         df_main['RATE_3MO'] = pd.to_numeric(df_main.iloc[:, 8], errors='coerce').fillna(0)
         df_main['RATE_2MO'] = pd.to_numeric(df_main.iloc[:, 11], errors='coerce').fillna(0)
         df_main['RATE_1MO'] = pd.to_numeric(df_main.iloc[:, 14], errors='coerce').fillna(0)
         df_main['PN_DESC_CHART'] = df_main['PART NUMBER'].astype(str) + "<br>" + df_main['DESCRIPTION'].astype(str).str[:25]
         
-        # LOAD HISTORY
+        # D. LOAD SHEET COMPONENT REPLACEMENT (HANYA UNTUK DETAIL HISTORY)
         df_hist = pd.read_excel(file_name, sheet_name="COMPONENT REPLACEMENT")
         df_hist.columns = [str(c).strip().upper() for c in df_hist.columns]
         date_col = next((c for c in df_hist.columns if 'DATE' in c), None)
@@ -74,11 +75,9 @@ if 'data_refresh' not in st.session_state or st.sidebar.button("🔄 Sync with E
 if 'data_refresh' in st.session_state:
     st.title("📊 Reliability Analysis Dashboard")
     
-    # INFO PERIOD
-    c1, c2 = st.columns(2)
-    c1.info(f"📅 **Current Period (A2/A3):** {st.session_state.p_m} {st.session_state.p_y}")
-    c2.success(f"⚙️ **Analysis Month (N-1):** {st.session_state.c_m} {st.session_state.c_y}")
-
+    # 3. HEADER INFORMASI (KONSISTEN)
+    st.info(f"📅 **Current Period (A2/A3):** {st.session_state.p_m} {st.session_state.p_y}")
+    
     # 4. CHART TOP 10
     st.subheader(f"📈 Top 10 Removal Rate ({st.session_state.c_m})")
     top_10 = st.session_state.df_m.sort_values(by='RATE_1MO', ascending=False).head(10).copy()
@@ -97,7 +96,7 @@ if 'data_refresh' in st.session_state:
             on_select="rerun", selection_mode="single-row"
         )
 
-    # 6. PART REMOVAL DETAIL
+    # 6. PART REMOVAL DETAIL (MENGGUNAKAN N-1 FILTER)
     if sel_event.selection.rows:
         sel_row = top_10.iloc[sel_event.selection.rows[0]]
         pn_sel = str(sel_row['PART NUMBER']).strip()
@@ -116,18 +115,19 @@ if 'data_refresh' in st.session_state:
         m2.metric("Current Rate", f"{sel_row['RATE_1MO']:.2f}")
         m3.metric("Total Qty Rem", f"{len(hist_match)} EA")
         
-        st.write(f"**Part Removal History ({st.session_state.c_m} {st.session_state.c_y}):**")
+        st.write(f"**Actual Removal Records in {st.session_state.c_m} {st.session_state.c_y}:**")
         if not hist_match.empty:
             st.table(hist_match[['DATE_DISPLAY', 'REASON OF REMOVAL', 'TSN', 'TSO']])
         else:
-            st.info(f"No removal records for {pn_sel} in {st.session_state.c_m}.")
+            st.info(f"Tidak ditemukan catatan pelepasan untuk {pn_sel} pada periode {st.session_state.c_m}.")
 
     st.divider()
 
-    # 7. UPTREND PART REMOVAL (DIBAWAH DETAIL)
+    # 7. UPTREND PART REMOVAL (HANYA MENGOLAH DATA DARI SHEET REMOVAL RATE CALCULATION)
     st.subheader("⚠️ UPTREND PART REMOVAL (3-Month Continuous Increase)")
     
-    # Filter Uptrend: O > L > I dan I > 0
+    # Logika Filter Uptrend: Rate O > Rate L > Rate I (Abaikan Rate 0)
+    # Diproses langsung dari dataframe sheet utama (df_m)
     uptrend_df = st.session_state.df_m[
         (st.session_state.df_m['RATE_1MO'] > st.session_state.df_m['RATE_2MO']) & 
         (st.session_state.df_m['RATE_2MO'] > st.session_state.df_m['RATE_3MO']) & 
@@ -135,10 +135,11 @@ if 'data_refresh' in st.session_state:
     ].copy()
 
     if not uptrend_df.empty:
-        st.warning(f"Terdeteksi {len(uptrend_df)} komponen dengan tren kenaikan removal rate.")
+        st.warning(f"Terdeteksi {len(uptrend_df)} komponen yang mengalami kenaikan removal rate berturut-turut.")
         st.dataframe(
             uptrend_df[['PART NUMBER', 'DESCRIPTION', 'RATE_3MO', 'RATE_2MO', 'RATE_1MO']], 
-            use_container_width=True, hide_index=True,
+            use_container_width=True, 
+            hide_index=True,
             column_config={
                 "RATE_3MO": "RATE PREVIOUS 3 MO (I)", 
                 "RATE_2MO": "RATE PREVIOUS 2 MO (L)", 
@@ -146,6 +147,6 @@ if 'data_refresh' in st.session_state:
             }
         )
     else:
-        st.success(f"✅ Tidak ada uptrend removal rate pada periode {st.session_state.c_m} {st.session_state.c_y}.")
+        st.success(f"✅ Tidak ada uptrend removal rate pada periode analisis {st.session_state.c_m} {st.session_state.c_y}.")
 
 st.sidebar.info(f"User: HERY SUPRIYATNO\nReliability Engineer")
