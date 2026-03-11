@@ -6,12 +6,11 @@ from datetime import datetime
 # 1. KONFIGURASI HALAMAN
 st.set_page_config(page_title="Reliability Dashboard | Airfast Indonesia", layout="wide")
 
-# 2. FUNGSI LOAD DATA (DIUBAH: Menghilangkan @st.cache agar data selalu fresh)
-def load_all_data_fresh(file_name):
+# 2. FUNGSI LOAD DATA (Dinamis dari File Upload)
+def load_data_from_upload(uploaded_file):
     try:
-        # PENTING: Gunakan engine='openpyxl' agar bisa membaca file yang mungkin sedang terbuka
-        # AMBIL PERIOD DARI SEL A2 & A3
-        df_ref = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None, nrows=3, usecols="A", engine='openpyxl')
+        # AMBIL PERIOD DARI SEL A2 & A3 (Sheet REMOVAL RATE CALCULATION)
+        df_ref = pd.read_excel(uploaded_file, sheet_name="REMOVAL RATE CALCULATION", header=None, nrows=3, usecols="A", engine='openpyxl')
         ref_month_str = str(df_ref.iloc[1, 0]).strip().upper() 
         ref_year_int = int(float(str(df_ref.iloc[2, 0]).strip())) 
         
@@ -20,23 +19,23 @@ def load_all_data_fresh(file_name):
         ref_month_idx = m_map.get(ref_month_str, 1)
 
         # LOAD TABEL UTAMA
-        df_raw = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=None, engine='openpyxl')
+        df_raw = pd.read_excel(uploaded_file, sheet_name="REMOVAL RATE CALCULATION", header=None, engine='openpyxl')
         h_idx = 0
         for i, row in df_raw.iterrows():
             if 'PART NUMBER' in [str(x).upper() for x in row.values]:
                 h_idx = i
                 break
-        df_main = pd.read_excel(file_name, sheet_name="REMOVAL RATE CALCULATION", header=h_idx, engine='openpyxl')
+        df_main = pd.read_excel(uploaded_file, sheet_name="REMOVAL RATE CALCULATION", header=h_idx, engine='openpyxl')
         df_main.columns = [str(c).strip().upper() for c in df_main.columns]
         
-        # Mapping Kolom Rate secara posisi (I=8, L=11, O=14)
+        # Mapping Rate (I, L, O)
         df_main['RATE_3MO'] = pd.to_numeric(df_main.iloc[:, 8], errors='coerce').fillna(0)
         df_main['RATE_2MO'] = pd.to_numeric(df_main.iloc[:, 11], errors='coerce').fillna(0)
         df_main['RATE_1MO'] = pd.to_numeric(df_main.iloc[:, 14], errors='coerce').fillna(0)
         df_main['PN_DESC_CHART'] = df_main['PART NUMBER'].astype(str) + "<br>" + df_main['DESCRIPTION'].astype(str).str[:25]
         
         # LOAD HISTORY
-        df_hist = pd.read_excel(file_name, sheet_name="COMPONENT REPLACEMENT", engine='openpyxl')
+        df_hist = pd.read_excel(uploaded_file, sheet_name="COMPONENT REPLACEMENT", engine='openpyxl')
         df_hist.columns = [str(c).strip().upper() for c in df_hist.columns]
         date_col = next((c for c in df_hist.columns if 'DATE' in c), None)
         if date_col:
@@ -45,28 +44,20 @@ def load_all_data_fresh(file_name):
         
         return df_main, df_hist, ref_month_str, ref_year_int, ref_month_idx
     except Exception as e:
-        st.error(f"Gagal Load Data: {e}")
-        return pd.DataFrame(), pd.DataFrame(), "N/A", 2026, 1
+        st.error(f"Error reading file: {e}")
+        return None, None, None, None, None
 
 # --- MAIN APP ---
-FILE_PATH = 'COMPONENT_RELIABILITY_DHC6-300.xlsm'
+st.sidebar.title("📤 Data Source")
+uploaded_file = st.sidebar.file_uploader("Upload your .xlsm file", type=["xlsm", "xlsx"])
 
-# Sidebar Refresh
-st.sidebar.header("Data Control")
-if st.sidebar.button("🔄 Reload From Excel Now"):
-    # Clear session state if any
-    st.rerun()
+if uploaded_file is not None:
+    df_main, df_history, p_month, p_year, p_m_idx = load_data_from_upload(uploaded_file)
 
-# Memanggil data TANPA CACHE
-df_main, df_history, p_month, p_year, p_m_idx = load_all_data_fresh(FILE_PATH)
-
-try:
-    if not df_main.empty:
+    if df_main is not None:
         st.title("📊 Reliability Analysis Dashboard")
-        
-        # Tampilan Period yang besar agar mudah dikonfirmasi
+        # Visual Konfirmasi Period
         st.success(f"📅 **Dashboard Active Period: {p_month} {p_year}**")
-        
         st.divider()
 
         # 4. CHART TOP 10
@@ -91,29 +82,24 @@ try:
             pn_selected = str(sel_row['PART NUMBER']).strip()
             
             pn_col_h = next((c for c in df_history.columns if 'PART' in c), df_history.columns[1])
-            
-            # Filter History: Menyesuaikan Bulan (p_m_idx) dan Tahun (p_year) dari Excel
             hist_match = df_history[
                 (df_history[pn_col_h].astype(str).str.strip() == pn_selected) & 
                 (df_history['DATE_DT'].dt.month == p_m_idx) & 
                 (df_history['DATE_DT'].dt.year == p_year)
             ].copy().sort_values(by='DATE_DT', ascending=False)
             
-            qty_rem = len(hist_match)
-
             st.write("---")
             st.subheader(f"🛠️ PART REMOVAL DETAIL: {pn_selected}")
-            
             c1, c2, c3 = st.columns([4, 1, 1])
             c1.metric("Description", sel_row.get('DESCRIPTION', 'N/A'))
             c2.metric("Rate Period", f"{sel_row['RATE_1MO']:.2f}")
-            c3.metric("Qty Removed", f"{qty_rem} EA")
+            c3.metric("Qty Removed", f"{len(hist_match)} EA")
             
             st.write(f"**History on {p_month} {p_year}:**")
             if not hist_match.empty:
                 st.dataframe(hist_match[['DATE_DISPLAY', 'REASON OF REMOVAL', 'TSN', 'TSO']], use_container_width=True, hide_index=True)
             else:
-                st.info(f"Tidak ada data pelepasan untuk {pn_selected} pada {p_month} {p_year}.")
+                st.info(f"No removal records for {pn_selected} in {p_month} {p_year}.")
         
         st.divider()
 
@@ -126,21 +112,17 @@ try:
         ].copy()
 
         if not uptrend.empty:
-            st.warning(f"Terdeteksi {len(uptrend)} komponen dengan tren kenaikan.")
+            st.warning(f"Detected {len(uptrend)} parts with uptrend.")
         else:
-            st.success(f"✅ Tidak ada uptrend removal rate pada periode {p_month} {p_year}.")
+            st.success(f"✅ No uptrend detected for {p_month} {p_year}.")
 
         st.dataframe(
             uptrend[['PART NUMBER', 'DESCRIPTION', 'RATE_3MO', 'RATE_2MO', 'RATE_1MO']], 
             use_container_width=True, hide_index=True,
-            column_config={
-                "RATE_3MO": "RATE PREV. 3MO", 
-                "RATE_2MO": "RATE PREV. 2MO", 
-                "RATE_1MO": "RATE PREV. 1MO"
-            }
+            column_config={"RATE_3MO": "RATE PREV. 3MO", "RATE_2MO": "RATE PREV. 2MO", "RATE_1MO": "RATE PREV. 1MO"}
         )
 
-except Exception as e:
-    st.error(f"Sistem Error: {e}")
+else:
+    st.warning("👈 Please upload the modified Excel file from the sidebar to see the updated data.")
 
 st.sidebar.info(f"User: HERY SUPRIYATNO\nAviation Reliability Engineer")
