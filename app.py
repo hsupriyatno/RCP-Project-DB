@@ -1,8 +1,3 @@
-Waduh, maaf sekali Pak Hery, itu murni kesalahan ketik (typo) dari saya pada baris ke-7. Di Streamlit, fungsi yang benar adalah st.set_page_config, bukan st.set_config. Pantesan aplikasinya langsung mogok (AttributeError) seperti di gambar yang Bapak kirim.
-
-Berikut adalah versi v3.2 yang sudah saya perbaiki perintahnya. Saya juga sekalian merapikan agar filter bulan/tahun benar-benar mengunci semua data sesuai isi sel A2 dan A3 di sheet REMOVAL RATE CALCULATION.
-
-Python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -138,3 +133,4 @@ except Exception as e:
     st.error(f"Sistem Error: {e}")
 
 st.sidebar.info(f"User: HERY SUPRIYATNO\nReliability Engineer")
+
